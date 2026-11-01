@@ -1,0 +1,1117 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<style>body{margin:0}</style>
+</head>
+<body>
+<title>Panel Caballito y Muñequita</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Baloo+2:wght@600;800&family=Figtree:wght@400;500;600;700&family=JetBrains+Mono:wght@500&display=swap">
+<style>
+/* Layout: fondo liso de juguetería; en el centro la muñequita y el caballito son el tablero (la base de datos con cara); los asistentes flotan por encima de toda la interfaz y se arrastran libremente; un panel lateral se abre para hablar, ver pendientes o buscar. */
+:root{
+  --bg:#e7ecfa; --surface:#ffffff; --surface-2:#f2f5fd; --line:#d3dbef; --fg:#1b2142; --muted:#5b6588;
+  --red:#ea4747; --yellow:#f2b21e; --blue:#3b78ec; --violet:#9460ee; --orange:#f3843a; --teal:#159c9c; --wa:#1a9e52;
+  --doll:#ff6f9f; --wood:#d6873f; --good:#1a8f4c; --warn:#b97800; --crit:#d23c3c;
+  --stage:#dce4f7;
+  --f-display:"Baloo 2","Trebuchet MS",system-ui,sans-serif;
+  --f-body:"Figtree",system-ui,-apple-system,"Segoe UI",sans-serif;
+  --f-mono:"JetBrains Mono",ui-monospace,Menlo,Consolas,monospace;
+  --shadow:0 10px 30px rgba(27,33,66,.12);
+}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){
+  --bg:#151a2c; --surface:#1f2540; --surface-2:#262d4b; --line:#353e60; --fg:#eef1fb; --muted:#a3acca;
+  --good:#3fd17e; --warn:#ffc64a; --crit:#ff7272; --wa:#30c56f; --shadow:0 10px 30px rgba(0,0,0,.35); --stage:#1b2139; color-scheme:dark}}
+:root[data-theme="dark"]{
+  --bg:#151a2c; --surface:#1f2540; --surface-2:#262d4b; --line:#353e60; --fg:#eef1fb; --muted:#a3acca;
+  --good:#3fd17e; --warn:#ffc64a; --crit:#ff7272; --wa:#30c56f; --shadow:0 10px 30px rgba(0,0,0,.35); --stage:#1b2139; color-scheme:dark}
+*{box-sizing:border-box}
+[hidden]{display:none!important}
+html,body{background:var(--bg)}
+body{color:var(--fg);font-family:var(--f-body);font-size:15px;line-height:1.45;overflow-x:hidden}
+button,input,select{font:inherit;color:inherit}
+button{cursor:pointer}
+:focus-visible{outline:3px solid var(--blue);outline-offset:2px}
+body::before{content:"";position:fixed;inset:0 0 auto;height:env(safe-area-inset-top,0px);z-index:60;background:var(--bg)}
+
+/* barra superior */
+.top{position:sticky;top:env(safe-area-inset-top,0px);z-index:30;background:var(--bg);padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));padding-block:12px}
+.top-in{max-width:1200px;margin:0 auto;display:flex;flex-wrap:wrap;gap:10px 16px;align-items:center}
+.brand{font-family:var(--f-display);font-weight:800;font-size:22px;line-height:1;margin-right:auto;display:flex;align-items:center;gap:8px}
+.brand small{font-family:var(--f-body);font-weight:500;font-size:13px;color:var(--muted)}
+.acc{display:flex;gap:8px}
+
+
+.acc .count{font-family:var(--f-mono);font-size:12px;background:var(--crit);color:#fff;border-radius:999px;padding:1px 7px}
+.tools{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.chip{display:inline-flex;align-items:center;gap:6px;font-size:12.5px;font-weight:600;padding:5px 10px;border-radius:999px;background:var(--surface);border:1px solid var(--line);white-space:nowrap}
+.chip .led{width:8px;height:8px;border-radius:50%;background:var(--wa);box-shadow:0 0 0 3px color-mix(in srgb,var(--wa) 25%,transparent)}
+select.lang{border:1px solid var(--line);background:var(--surface);border-radius:999px;padding:5px 10px;font-size:13px;font-weight:600;min-height:32px}
+.toggle{border:1px solid var(--line);background:var(--surface);border-radius:999px;padding:5px 12px;font-size:12.5px;font-weight:600;min-height:32px}
+.toggle[aria-pressed="true"]{background:var(--fg);color:var(--bg);border-color:var(--fg)}
+
+/* escenario 3D */
+.stage3d{position:relative;max-width:1200px;margin:6px auto 0;height:clamp(500px,74vh,760px);border-radius:32px;background:var(--stage);overflow:hidden;touch-action:pan-y}
+.stage3d canvas{display:block;width:100%;height:100%;cursor:grab}
+.stage3d.moving canvas,.stage3d canvas:active{cursor:grabbing}
+.stage3d.movemode canvas{cursor:move}
+.ov{position:absolute;inset:0;pointer-events:none;overflow:hidden}
+.anchor{position:absolute;left:0;top:0;will-change:transform}
+.say{pointer-events:auto;cursor:pointer;position:relative;background:var(--surface);border-radius:16px;padding:9px 13px;width:max-content;max-width:250px;box-shadow:var(--shadow);font-size:13.5px;line-height:1.35;transform:translate(-50%,-100%)}
+.say::after{content:"";position:absolute;left:50%;bottom:-7px;width:14px;height:14px;background:var(--surface);transform:translateX(-50%) rotate(45deg);border-radius:2px}
+.say b{font-family:var(--f-display);font-weight:800;font-size:14.5px;display:block;line-height:1.1;margin-bottom:1px}
+.scr{pointer-events:auto;padding:5px;border-radius:14px;background:var(--surface);box-shadow:0 6px 18px rgba(20,25,50,.25),inset 0 0 0 2px rgba(0,0,0,.05);transform:translate(-50%,10px) scale(var(--k,1));transform-origin:50% 0;display:block}
+.scrh{display:flex;align-items:center;justify-content:space-between;gap:8px;padding:1px 3px 5px 5px;font-family:var(--f-display);font-weight:800;font-size:13px}
+.scrh .scx{border:0;background:var(--surface-2);border-radius:8px;width:26px;height:26px;font-size:16px;line-height:1}
+.screen{cursor:pointer}
+.scr:hover{box-shadow:0 0 0 3px var(--blue),0 6px 18px rgba(20,25,50,.25)}
+.screen{display:grid;gap:4px}
+.scr.doll .screen{width:124px;grid-template-rows:repeat(3,30px)}
+.scr.horse .screen{width:176px;grid-template-columns:repeat(2,1fr);grid-template-rows:repeat(2,32px)}
+.stat{display:flex;align-items:center;justify-content:space-between;gap:5px;padding:0 7px;border-radius:8px;background:var(--surface-2);min-width:0;line-height:1}
+.stat strong{font-family:var(--f-display);font-weight:800;font-size:19px}
+.stat span{font-size:10.5px;color:var(--muted);font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.stat.alert strong{color:var(--crit)}
+.scr.doll .stat{justify-content:flex-start;gap:8px}
+@media (max-width:520px){.say{max-width:180px;font-size:12px;padding:7px 10px}.say b{font-size:13px}.blbl .nm{font-size:11px}.blbl .tip{max-width:160px;font-size:11.5px}}
+.blbl{display:flex;flex-direction:column;align-items:center;transform:translate(-50%,0)}
+.blbl .nm{font-family:var(--f-display);font-weight:800;font-size:12.5px;background:var(--surface);border-radius:999px;padding:0 9px;line-height:1.6;box-shadow:0 2px 6px rgba(20,25,50,.15);white-space:nowrap}
+.blbl .tip{position:absolute;bottom:calc(100% + 58px);left:50%;transform:translateX(-50%);background:var(--fg);color:var(--bg);font-size:12.5px;font-weight:600;padding:6px 10px;border-radius:10px;width:max-content;max-width:210px;text-align:center;opacity:0;transition:opacity .25s}
+.blbl.talk .tip{opacity:1}
+.sbar{position:absolute;left:12px;bottom:12px;display:flex;flex-wrap:wrap;gap:8px;z-index:2;right:12px;pointer-events:none}
+.sbar button{pointer-events:auto;border:1px solid var(--line);background:var(--surface);border-radius:999px;padding:7px 13px;font-size:12.5px;font-weight:700;min-height:36px;display:inline-flex;gap:6px;align-items:center}
+.sbar button[aria-pressed="true"]{background:var(--fg);color:var(--bg);border-color:var(--fg)}
+.hint3d{position:absolute;top:12px;left:50%;transform:translateX(-50%);font-size:12.5px;font-weight:600;color:var(--muted);background:var(--surface);border-radius:999px;padding:5px 12px;white-space:nowrap;max-width:calc(100% - 24px);overflow:hidden;text-overflow:ellipsis}
+.nogl{position:absolute;inset:0;display:grid;place-items:center;text-align:center;padding:24px;color:var(--muted)}
+.caption{text-align:center;color:var(--muted);font-size:13px;max-width:62ch;margin:12px auto 0}
+/* pantallita */
+.brand .logo{display:inline-grid;grid-template-columns:repeat(3,9px);gap:2px;margin-right:2px}
+.brand .logo i{width:9px;height:9px;border-radius:2px;background:var(--red)}.brand .logo i:nth-child(2){background:var(--yellow);transform:translateY(-4px)}.brand .logo i:nth-child(3){background:var(--blue)}
+.acc{display:flex;gap:8px;flex-wrap:wrap}
+.hb{display:inline-flex;align-items:center;gap:10px;border:1px solid var(--line);background:var(--surface);color:var(--fg);border-radius:16px;padding:5px 14px 5px 5px;min-height:46px;font-weight:700;font-size:15px;box-shadow:0 2px 0 var(--line);transition:transform .15s,box-shadow .15s,background .15s;cursor:pointer}
+.hb:hover{transform:translateY(-1px);box-shadow:0 6px 16px rgba(27,33,66,.12)}
+.hb:active{transform:translateY(1px);box-shadow:0 1px 0 var(--line)}
+.hb .ic{width:34px;height:34px;border-radius:11px;display:grid;place-items:center;color:var(--c);background:color-mix(in srgb,var(--c) 15%,transparent);flex:none}
+.hb.sm{min-height:40px;font-size:13px;padding:4px 12px 4px 4px;border-radius:14px}
+.hb.sm .ic{width:30px;height:30px;border-radius:10px}
+.hb[aria-pressed="true"]{background:var(--fg);color:var(--bg);border-color:var(--fg)}
+.hb[aria-pressed="true"] .ic{background:var(--c);color:#fff}
+.hb .count{font-family:var(--f-mono);font-size:12px;background:var(--crit);color:#fff;border-radius:999px;padding:1px 7px;margin-left:-2px}
+.langw select{border:0;background:transparent;font-weight:700;font-size:13px;padding:4px 2px;cursor:pointer;min-height:30px}
+.tools{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+@media (max-width:620px){.brand{width:100%}.acc{width:100%}.acc .hb{flex:1 1 30%;justify-content:center;padding-right:8px;font-size:14px}.acc .hb .ic{width:30px;height:30px}}
+.wa-box{display:flex;flex-direction:column;gap:8px;width:100%}
+.wa-row{display:flex;gap:8px;flex-wrap:wrap}
+.wa-tel{flex:1 1 220px;min-width:0;border:1px solid var(--line);background:var(--surface-2);border-radius:12px;padding:8px 12px;min-height:42px}
+.wa-row .btn{text-decoration:none}
+.wa-prev{margin:0;font-size:13px;color:var(--muted);background:var(--surface-2);border-radius:12px;padding:8px 12px;user-select:text}
+.tv-nav{display:flex;gap:6px}
+.calc-t{align-self:flex-start;border:0;background:rgba(255,255,255,.14);color:#fff;border-radius:999px;padding:4px 10px;font-size:12px;font-weight:700}
+.calc{display:flex;flex-direction:column;gap:3px;font-size:11.5px;color:#cfd6f5;background:rgba(255,255,255,.06);border-radius:10px;padding:8px}
+.calc div{display:flex;justify-content:space-between;gap:8px}
+.calc b{font-family:var(--f-mono);font-weight:500;color:#fff;white-space:nowrap}
+.sr-only{position:absolute;left:-9999px}
+
+.tvtabs{display:flex;gap:6px;margin-bottom:10px}
+.tvtabs button{border:0;background:var(--surface-2);border-radius:12px;padding:8px 14px;font-weight:700;min-height:40px}
+.tvtabs button[aria-selected="true"]{background:var(--fg);color:var(--bg)}
+.tvbox{background:#10142a;border-radius:16px;display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);overflow:hidden;color:#eef1ff;min-height:230px}
+.tvpic{position:relative;background:#dce4f7;min-width:0;min-height:200px}
+.tvpic img,.tvpic canvas{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;display:block}
+.tvpic .live{position:absolute;top:10px;left:10px;font-size:11px;font-weight:800;background:var(--crit);color:#fff;border-radius:6px;padding:2px 7px;letter-spacing:.06em;z-index:1}
+.tvinfo{padding:14px;display:flex;flex-direction:column;gap:5px;justify-content:center;min-width:0}
+.tvinfo .t{font-family:var(--f-display);font-weight:800;font-size:clamp(17px,2.1vw,22px);line-height:1.1}
+.tvinfo .p{font-family:var(--f-display);font-weight:800;font-size:clamp(20px,2.8vw,28px);color:#ffd35c}
+.tvinfo .q{font-size:14px;font-weight:700}
+.tvinfo .m{font-size:12.5px;color:#aab3d8}
+.mkrow{display:flex;flex-wrap:wrap;gap:5px}
+.mkrow button{border:0;background:rgba(255,255,255,.14);color:#fff;border-radius:999px;padding:4px 10px;font-size:12.5px;font-weight:700;min-height:30px}
+.mkrow button[aria-pressed="true"]{background:#fff;color:#10142a}
+.mkrow .sw{width:26px;height:26px;padding:0;border-radius:50%;border:2px solid rgba(255,255,255,.5)}
+.mkrow .sw[aria-pressed="true"]{border-color:#fff;box-shadow:0 0 0 2px #ffd35c}
+@media (max-width:520px){.tvbox{grid-template-columns:1fr}.tvpic{aspect-ratio:4/3}}
+.tour{position:fixed;inset:0;z-index:80;pointer-events:none}
+.tour .hole{position:fixed;border-radius:18px;box-shadow:0 0 0 9999px rgba(10,14,30,.55);outline:3px solid #ffd35c;transition:all .35s ease}
+.tour .card{position:fixed;pointer-events:auto;background:var(--surface);color:var(--fg);border-radius:18px;padding:14px 16px;box-shadow:var(--shadow);display:flex;flex-direction:column;gap:10px;transition:top .35s,left .35s}
+.tour .card p{margin:0;font-size:15px;font-weight:600}
+.tour .card .row2{display:flex;gap:6px;align-items:center}
+.tour .card .row2 span{margin-right:auto;font-family:var(--f-mono);font-size:12px;color:var(--muted)}
+@media (prefers-reduced-motion:reduce){.tour .hole,.tour .card{transition:none}}
+
+.below{max-width:1200px;margin:28px auto 0;display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1.3fr);gap:20px}
+@media (max-width:860px){.below{grid-template-columns:1fr}}
+.tv{position:relative;background:var(--surface);border-radius:28px;padding:18px;box-shadow:var(--shadow);margin-top:22px}
+.tv::before,.tv::after{content:"";position:absolute;top:-22px;width:4px;height:30px;background:var(--muted);border-radius:4px}
+.tv::before{left:38%;transform:rotate(-24deg)}.tv::after{left:58%;transform:rotate(24deg)}
+.tv h2,.feed h2{font-family:var(--f-display);font-weight:800;font-size:19px;margin:0 0 8px;display:flex;align-items:center;gap:8px}
+.tv-screen{background:#10142a;border-radius:16px;aspect-ratio:16/10;max-width:100%;overflow:hidden;display:grid;place-items:center;position:relative;color:#e9edff}
+.tv-screen img,.tv-screen video{width:100%;height:100%;object-fit:cover}
+.tv-screen .live{position:absolute;top:10px;left:10px;font-size:11px;font-weight:700;background:var(--crit);color:#fff;border-radius:6px;padding:2px 7px;letter-spacing:.06em}
+.tv-req{font-size:14px;margin:10px 0}
+.tv-actions{display:flex;flex-wrap:wrap;gap:8px}
+.btn{border:0;border-radius:12px;padding:9px 14px;font-weight:700;background:var(--surface-2);min-height:42px;display:inline-flex;align-items:center;gap:6px}
+.btn:hover{filter:brightness(.97)}
+.btn.main{background:var(--fg);color:var(--bg)}
+.btn.wa{background:var(--wa);color:#fff}
+.btn.small{min-height:34px;padding:6px 11px;font-size:13px;border-radius:10px}
+.btn:disabled{opacity:.45;cursor:default}
+.ph{display:flex;flex-direction:column;align-items:center;gap:8px;padding:16px;text-align:center}
+.ph .box{width:96px;height:96px;border-radius:22px;display:grid;place-items:center;font-family:var(--f-display);font-weight:800;font-size:34px;color:#fff}
+.ph small{color:#aab3d8}
+
+/* actividad */
+.feed{background:var(--surface);border-radius:24px;padding:18px;box-shadow:var(--shadow);min-width:0}
+.feed ol{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:8px;max-height:340px;overflow-y:auto}
+.feed li{display:grid;grid-template-columns:12px minmax(0,1fr) auto;gap:10px;align-items:start;font-size:14px;padding:8px 10px;background:var(--surface-2);border-radius:12px}
+.feed li .dot{width:12px;height:12px;border-radius:4px;margin-top:4px}
+.feed li time{font-family:var(--f-mono);font-size:11px;color:var(--muted);white-space:nowrap;padding-top:3px}
+.tag{display:inline-block;font-size:11px;font-weight:700;border-radius:6px;padding:0 6px;margin-left:4px;vertical-align:1px}
+.tag.auto{background:color-mix(in srgb,var(--blue) 15%,transparent);color:var(--blue)}
+.tag.you{background:color-mix(in srgb,var(--good) 15%,transparent);color:var(--good)}
+
+/* panel lateral */
+.drawer{position:fixed;top:0;right:0;bottom:0;width:min(440px,100vw);background:var(--surface);z-index:50;box-shadow:-10px 0 40px rgba(20,25,50,.2);display:flex;flex-direction:column;transform:translateX(105%);transition:transform .3s ease;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px);padding-right:env(safe-area-inset-right,0px)}
+.drawer.open{transform:none}
+.dh{display:flex;align-items:center;gap:10px;padding:14px 16px;border-bottom:1px solid var(--line)}
+.dh h2{font-family:var(--f-display);font-weight:800;font-size:21px;margin:0;flex:1;line-height:1.1}
+.dh .x{border:0;background:var(--surface-2);border-radius:12px;width:40px;height:40px;font-size:20px;line-height:1}
+.db{flex:1;overflow-y:auto;padding:14px 16px;display:flex;flex-direction:column;gap:12px;min-height:0}
+.df{border-top:1px solid var(--line);padding:12px 16px;display:flex;gap:8px;align-items:center}
+.df input{flex:1;min-width:0;border:1px solid var(--line);background:var(--surface-2);border-radius:14px;padding:11px 14px;min-height:46px}
+.mic{width:46px;height:46px;border-radius:50%;border:0;background:var(--surface-2);display:grid;place-items:center;flex:none}
+.send{width:46px;height:46px;border-radius:50%;border:0;background:var(--fg);color:var(--bg);display:grid;place-items:center;flex:none}
+.msg{max-width:88%;padding:10px 13px;border-radius:16px;font-size:14.5px;white-space:pre-wrap}
+.msg.me{align-self:flex-end;background:var(--fg);color:var(--bg);border-bottom-right-radius:5px}
+.msg.ai{align-self:flex-start;background:var(--surface-2);border-bottom-left-radius:5px}
+.msg.ai .who{display:flex;align-items:center;gap:6px;font-family:var(--f-display);font-weight:800;font-size:13px;margin-bottom:2px}
+.msg.ai .who i{width:10px;height:10px;border-radius:3px}
+.msg.note{align-self:center;background:none;color:var(--muted);font-size:13px;text-align:center}
+.prop{border:2px solid var(--line);border-radius:16px;padding:12px;display:flex;flex-direction:column;gap:8px;font-size:14px}
+.prop .st{font-size:12px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.05em}
+.prop.done{border-color:var(--good)}
+.prop.no{opacity:.6}
+.suggest{display:flex;flex-wrap:wrap;gap:6px}
+.suggest button{border:1px solid var(--line);background:var(--surface);border-radius:999px;padding:6px 11px;font-size:13px;font-weight:600}
+.item{background:var(--surface-2);border-radius:14px;padding:12px;display:flex;flex-direction:column;gap:6px;font-size:14px}
+.item .row{display:flex;justify-content:space-between;gap:8px;align-items:baseline;flex-wrap:wrap}
+.item .num{font-family:var(--f-mono);font-size:13px}
+.item .acts{display:flex;gap:6px;flex-wrap:wrap}
+.pills{display:flex;gap:5px;flex-wrap:wrap}
+.pill{font-size:11.5px;font-weight:700;border-radius:999px;padding:2px 8px;background:var(--surface);border:1px solid var(--line)}
+.pill.good{color:var(--good);border-color:color-mix(in srgb,var(--good) 45%,transparent)}
+.pill.warn{color:var(--warn);border-color:color-mix(in srgb,var(--warn) 45%,transparent)}
+.pill.crit{color:var(--crit);border-color:color-mix(in srgb,var(--crit) 45%,transparent)}
+.sec{font-family:var(--f-display);font-weight:800;font-size:16px;margin:6px 0 -4px}
+.muted{color:var(--muted);font-size:13px}
+.check{display:flex;gap:10px;align-items:center;padding:8px;background:var(--surface);border-radius:10px}
+.check input{width:22px;height:22px}
+.scrim{position:fixed;inset:0;background:rgba(15,18,35,.25);z-index:45;opacity:0;pointer-events:none;transition:opacity .3s}
+.scrim.on{opacity:1;pointer-events:auto}
+.resetbots{position:fixed;left:max(12px,env(safe-area-inset-left,0px));bottom:calc(12px + env(safe-area-inset-bottom,0px));z-index:41;border:1px solid var(--line);background:var(--surface);border-radius:999px;padding:7px 12px;font-size:12.5px;font-weight:700;box-shadow:var(--shadow)}
+@media (max-width:520px){.bot .body{width:48px;height:42px}.bot .nm{font-size:10.5px;padding:0 5px}.brand{width:100%}}
+.foot{max-width:1200px;margin:24px auto 0;color:var(--muted);font-size:12.5px;text-align:center}
+@media (prefers-reduced-motion:reduce){.bot .body,#links path{animation:none!important}.drawer,.scrim,.tip{transition:none}}
+</style>
+
+<header class="top">
+  <div class="top-in">
+    <div class="brand"><span class="logo" aria-hidden="true"><i></i><i></i><i></i></span>Juguetería <small data-i="panel">Panel</small></div>
+    <nav class="acc" aria-label="Accesos">
+      <button id="bTalk" class="hb"><span class="ic" style="--c:var(--violet)"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 5h16v11H9l-5 4z"/></svg></span><span data-i="talk">Hablar</span></button>
+      <button id="bPend" class="hb"><span class="ic" style="--c:var(--red)"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 8a6 6 0 1 1 12 0c0 7 3 8 3 8H3s3-1 3-8M10 20a2 2 0 0 0 4 0"/></svg></span><span data-i="pend">Pendientes</span><span class="count" id="pendCount">0</span></button>
+      <button id="bFind" class="hb"><span class="ic" style="--c:var(--blue)"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><path d="m20 20-4-4"/></svg></span><span data-i="find">Buscar</span></button>
+    </nav>
+    <div class="tools">
+      <button class="hb sm" id="rush" aria-pressed="false"><span class="ic" style="--c:var(--orange)"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M13 2 4 14h7l-1 8 9-12h-7z"/></svg></span><span data-i="rush">Urgentes primero</span></button>
+      <button class="hb sm" id="bTour"><span class="ic" style="--c:var(--teal)"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M9.5 9.5a2.5 2.5 0 1 1 3.5 2.3c-.6.3-1 .8-1 1.5V14M12 17.5h.01"/></svg></span><span id="bTourTxt">¿Cómo se usa?</span></button>
+      <label class="hb sm langw"><span class="ic" style="--c:var(--yellow)"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3c3 3.5 3 14.5 0 18M12 3c-3 3.5-3 14.5 0 18"/></svg></span><select class="lang" id="lang" aria-label="Idioma"><option value="es">Español</option><option value="en">English</option><option value="pt">Português</option></select></label>
+    </div>
+  </div>
+</header>
+
+<main>
+  <section class="stage3d" id="stage" aria-label="Sistema en 3D">
+    <canvas id="gl" aria-label="Muñequita y caballito en 3D con cinco asistentes girando alrededor"></canvas>
+    <div class="ov" id="ov">
+      <div class="anchor" id="aDollSay"><div class="say" id="dollSay" aria-live="polite"></div></div>
+      <div class="anchor" id="aHorseSay"><div class="say" id="horseSay" aria-live="polite"></div></div>
+      <div class="anchor" id="aDollScr" hidden><div class="scr doll"><div class="scrh"><span data-i="dollTitle">Muñequita · clientes</span><button class="scx" data-close="doll" aria-label="Cerrar">×</button></div><div class="screen" id="dollScreen" role="button" tabindex="0" aria-label="Ver detalle de clientes"></div></div></div>
+      <div class="anchor" id="aHorseScr" hidden><div class="scr horse"><div class="scrh"><span data-i="horseTitle">Caballito · pedidos y stock</span><button class="scx" data-close="horse" aria-label="Cerrar">×</button></div><div class="screen" id="horseScreen" role="button" tabindex="0" aria-label="Ver detalle de pedidos y stock"></div></div></div>
+    </div>
+    <div class="hint3d" id="hint" data-i="hint">Arrastrá para girar · tocá un personaje o un asistente</div>
+    <div class="sbar">
+      <button id="resetBots" data-i="resetBots">Volver al centro</button>
+    </div>
+  </section>
+  <p class="caption" data-i="caption"></p>
+  <section class="below">
+    <div class="tv" aria-labelledby="tvTitle">
+      <h2 id="tvTitle"><span data-i="tvTitle">Pantallita en vivo</span></h2>
+      <div class="tvtabs" role="tablist"><button role="tab" id="tvTabStock" aria-selected="true" data-i="tvStock">En stock hoy</button><button role="tab" id="tvTabMake" aria-selected="false" data-i="tvMake">Se puede crear</button></div>
+      <div class="tvbox"><div class="tvpic"><span class="live" data-i="live">EN VIVO</span><img id="tvImg" alt=""><canvas id="tvgl" hidden aria-label="Juguete a medida en 3D"></canvas></div><div class="tvinfo" id="tvInfo"></div></div>
+      <p class="tv-req" id="tvReq"></p>
+      <div class="tv-actions" id="tvActs"></div>
+      <input type="file" id="tvFile" accept="image/*" hidden>
+    </div>
+    <div class="card-feed-spacer" hidden></div>
+    
+<div class="feed">
+      <h2 data-i="feedTitle">Lo que hicieron los asistentes</h2>
+      <ol id="feed"></ol>
+    </div>
+  </section>
+  <p class="foot" data-i="foot">Vista de demostración con datos de ejemplo. Los mensajes de WhatsApp están simulados; nada se envía a clientes reales.</p>
+</main>
+
+
+<div class="tour" id="tour" hidden><div class="hole" id="tourHole"></div><div class="card" id="tourCard"><p id="tourTxt"></p><div class="row2"><span id="tourN"></span><button class="btn small" id="tourPrev" aria-label="anterior">‹</button><button class="btn small main" id="tourNext"></button><button class="btn small" id="tourEnd" aria-label="salir">×</button></div></div></div>
+<div class="scrim" id="scrim"></div>
+<aside class="drawer" id="drawer" aria-hidden="true" aria-labelledby="dTitle">
+  <div class="dh"><h2 id="dTitle"></h2><button class="x" id="dClose" aria-label="Cerrar">×</button></div>
+  <div class="db" id="dBody"></div>
+  <div class="df" id="dFoot" hidden>
+    <button class="mic" id="mic" aria-label="Hablar por voz"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5 11a7 7 0 0 0 14 0M12 18v3"/></svg></button>
+    <input id="chatIn" autocomplete="off">
+    <button class="send" id="chatSend" aria-label="Enviar"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 6l6 6-6 6"/></svg></button>
+  </div>
+</aside>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script>
+(function(){
+const reduce = matchMedia('(prefers-reduced-motion: reduce)').matches;
+const $ = s=>document.querySelector(s);
+const store = {get(k,d){try{const v=localStorage.getItem('jg-'+k);return v?JSON.parse(v):d}catch(e){return d}},set(k,v){try{localStorage.setItem('jg-'+k,JSON.stringify(v))}catch(e){}}};
+
+/* ---------- idiomas ---------- */
+const L = {
+es:{panel:'Panel',move:'Mover sistema',spinOn:'Pausar giro',spinOff:'Girar',talk:'Hablar',pend:'Pendientes',find:'Buscar',waon:'WhatsApp conectado · demo',rush:'Urgentes primero',liveDemo:'Demo en vivo',dollName:'Muñequita',horseName:'Caballito',
+caption:'La muñequita y el caballito son la base de datos en 3D y los seis asistentes giran siempre a su alrededor. Tocalos o arrastralos: todos se mueven y hacen gestos.',hint:'Tocá o arrastrá a cualquiera: asistentes, muñequita o caballito',
+tvTitle:'Pantallita en vivo',tvStock:'En stock hoy',tvMake:'Se puede crear',live:'EN VIVO',tvUpload:'Foto o video',tvSend:'Enviar por WhatsApp',feedTitle:'Lo que hicieron los asistentes',foot:'Vista de demostración con datos de ejemplo. Los mensajes de WhatsApp están simulados; nada se envía a clientes reales.',resetBots:'Volver al centro',
+sWait:'esperan',sRecs:'sugeridos',sFollow:'en curso',sOrders:'pedidos',sReady:'a retirar',sRes:'reservas',sLow:'stock bajo',
+chatPh:'Escribí o tocá el micrófono…',auto:'automático',you:'confirmado',now:'ahora',
+tvIdle:'Cuando un cliente pide ver un juguete, aparece acá.',tvAsk:n=>`${n} quiere verlo antes de comprar.`,tvSent:n=>`Video enviado a ${n} por WhatsApp.`,
+open:'Abrir',snooze:'Posponer',solve:'Resolver',take:'Tomar',giveBack:'Devolver al bot',advance:'Avanzar',prepare:'Preparar',confirm:'Confirmar',cancel:'Cancelar',show:'Mostrar en pantallita',
+dollTitle:'Muñequita · clientes',horseTitle:'Caballito · pedidos y stock',talkTitle:'Hablar',pendTitle:'Pendientes',findTitle:'Buscar',
+convs:'Conversaciones',orders:'Pedidos',stockLow:'Stock y reservas',findPh:'Producto, cliente o número de pedido',photoSearch:'Buscar por foto: llega en la etapa 2.',
+micNote:'En esta vista de demostración el navegador bloquea el micrófono. En el panel real tocás el micrófono, hablás y revisás la transcripción antes de enviar.',
+noAI:'Sin conexión con la IA en esta vista: respondo con reglas simples.',propTitle:'Propuesta · necesita tu confirmación',applied:'Hecho. Quedó registrado.',declined:'Cancelado. No se cambió nada.',
+prepTitle:'Preparación guiada',prepHint:'Verificá cada línea antes de marcar listo.',empty:'No hay nada pendiente.',
+sug:['¿Qué tengo pendiente?','El J-0142 está listo','Llegaron 6 peluches de unicornio','Anotá un pedido telefónico: Rubén, 2 rompecabezas, retira mañana'],
+ord:{pend:'Pendiente de confirmar',conf:'Confirmado',prep:'En preparación',listo:'Listo',entr:'Entregado',canc:'Cancelado'},
+av:{sinver:'Sin verificar',reserv:'Reservada 24 h',confloc:'Confirmada por el local',sinstock:'Sin stock'},
+pay:{sinpagar:'Sin pagar',comprob:'Comprobante recibido',acred:'Acreditado'},
+cv:{bot:'Atiende el bot',derivada:'Espera a una persona',persona:'Atiende una persona',cliente:'Espera al cliente',resuelta:'Resuelta'},
+pickup:'retiro',ship:'envío',phone:'teléfono',
+dollSay:(w,n)=> w? `Hay ${w} ${w>1?'consultas esperando':'consulta esperando'} a una persona${n?` (${n})`:''}. ¿La revisamos?` : 'Todas las consultas tienen respuesta.',
+horseSay:(r,n)=> r? `Hay ${r} ${r>1?'pedidos':'pedido'} para retirar hoy.${n?` El de ${n} lleva envoltorio.`:''}` : 'No hay retiros para hoy.',
+rushSay:'Modo hora pico: primero lo que tiene horario acordado.'},
+en:{panel:'Dashboard',move:'Move system',spinOn:'Pause orbit',spinOff:'Orbit',talk:'Talk',pend:'To-dos',find:'Search',waon:'WhatsApp connected · demo',rush:'Urgent first',liveDemo:'Live demo',dollName:'Doll',horseName:'Horse',
+caption:'The doll and the horse are the 3D database, and the six assistants always orbit around them. Tap or drag them: they all move and react.',hint:'Tap or drag anyone: assistants, doll or horse',
+tvTitle:'Live screen',tvStock:'In stock today',tvMake:'Can be made',live:'LIVE',tvUpload:'Photo or video',tvSend:'Send via WhatsApp',feedTitle:'What the assistants did',foot:'Demo view with sample data. WhatsApp messages are simulated; nothing is sent to real customers.',resetBots:'Back to center',
+sWait:'waiting',sRecs:'suggested',sFollow:'active',sOrders:'orders',sReady:'pickups',sRes:'reserved',sLow:'low stock',
+chatPh:'Type or tap the microphone…',auto:'automatic',you:'confirmed',now:'now',
+tvIdle:'When a customer asks to see a toy, it shows up here.',tvAsk:n=>`${n} wants to see it before buying.`,tvSent:n=>`Video sent to ${n} via WhatsApp.`,
+open:'Open',snooze:'Snooze',solve:'Resolve',take:'Take over',giveBack:'Hand back to bot',advance:'Advance',prepare:'Prepare',confirm:'Confirm',cancel:'Cancel',show:'Show on screen',
+dollTitle:'Doll · customers',horseTitle:'Horse · orders and stock',talkTitle:'Talk',pendTitle:'To-dos',findTitle:'Search',
+convs:'Conversations',orders:'Orders',stockLow:'Stock and reservations',findPh:'Product, customer or order number',photoSearch:'Search by photo: coming in stage 2.',
+micNote:'In this demo view the browser blocks the microphone. In the real dashboard you tap the mic, speak and review the transcript before sending.',
+noAI:'No AI connection in this view: answering with simple rules.',propTitle:'Proposal · needs your confirmation',applied:'Done. It is recorded.',declined:'Cancelled. Nothing changed.',
+prepTitle:'Guided preparation',prepHint:'Check every line before marking it ready.',empty:'Nothing pending.',
+sug:['What is pending?','J-0142 is ready','6 unicorn plushies arrived','Log a phone order: Rubén, 2 puzzles, picks up tomorrow'],
+ord:{pend:'Awaiting confirmation',conf:'Confirmed',prep:'Preparing',listo:'Ready',entr:'Delivered',canc:'Cancelled'},
+av:{sinver:'Not verified',reserv:'Reserved 24 h',confloc:'Confirmed by store',sinstock:'Out of stock'},
+pay:{sinpagar:'Unpaid',comprob:'Receipt received',acred:'Paid'},
+cv:{bot:'Bot answering',derivada:'Waiting for a person',persona:'Person answering',cliente:'Waiting for customer',resuelta:'Resolved'},
+pickup:'pickup',ship:'delivery',phone:'phone',
+dollSay:(w,n)=> w? `${w} ${w>1?'conversations are':'conversation is'} waiting for a person${n?` (${n})`:''}. Shall we check?` : 'Every conversation has an answer.',
+horseSay:(r,n)=> r? `${r} ${r>1?'orders':'order'} to pick up today.${n?` ${n}'s needs gift wrap.`:''}` : 'No pickups today.',
+rushSay:'Rush mode: scheduled pickups first.'},
+pt:{panel:'Painel',move:'Mover sistema',spinOn:'Pausar giro',spinOff:'Girar',talk:'Falar',pend:'Pendências',find:'Buscar',waon:'WhatsApp conectado · demo',rush:'Urgentes primeiro',liveDemo:'Demo ao vivo',dollName:'Bonequinha',horseName:'Cavalinho',
+caption:'A bonequinha e o cavalinho são o banco de dados em 3D e os seis assistentes giram sempre ao redor. Toque ou arraste: todos se movem e fazem gestos.',hint:'Toque ou arraste qualquer um: assistentes, bonequinha ou cavalinho',
+tvTitle:'Telinha ao vivo',tvStock:'Em estoque hoje',tvMake:'Dá para criar',live:'AO VIVO',tvUpload:'Foto ou vídeo',tvSend:'Enviar pelo WhatsApp',feedTitle:'O que os assistentes fizeram',foot:'Visualização de demonstração com dados de exemplo. As mensagens de WhatsApp são simuladas; nada é enviado a clientes reais.',resetBots:'Voltar ao centro',
+sWait:'aguardam',sRecs:'sugeridos',sFollow:'ativas',sOrders:'pedidos',sReady:'a retirar',sRes:'reservas',sLow:'est. baixo',
+chatPh:'Escreva ou toque no microfone…',auto:'automático',you:'confirmado',now:'agora',
+tvIdle:'Quando um cliente pede para ver um brinquedo, aparece aqui.',tvAsk:n=>`${n} quer ver antes de comprar.`,tvSent:n=>`Vídeo enviado para ${n} pelo WhatsApp.`,
+open:'Abrir',snooze:'Adiar',solve:'Resolver',take:'Assumir',giveBack:'Devolver ao bot',advance:'Avançar',prepare:'Preparar',confirm:'Confirmar',cancel:'Cancelar',show:'Mostrar na telinha',
+dollTitle:'Bonequinha · clientes',horseTitle:'Cavalinho · pedidos e estoque',talkTitle:'Falar',pendTitle:'Pendências',findTitle:'Buscar',
+convs:'Conversas',orders:'Pedidos',stockLow:'Estoque e reservas',findPh:'Produto, cliente ou número do pedido',photoSearch:'Busca por foto: chega na etapa 2.',
+micNote:'Nesta demonstração o navegador bloqueia o microfone. No painel real você toca no microfone, fala e revisa a transcrição antes de enviar.',
+noAI:'Sem conexão com a IA nesta visualização: respondo com regras simples.',propTitle:'Proposta · precisa da sua confirmação',applied:'Feito. Ficou registrado.',declined:'Cancelado. Nada mudou.',
+prepTitle:'Preparação guiada',prepHint:'Confira cada linha antes de marcar como pronto.',empty:'Nada pendente.',
+sug:['O que está pendente?','O J-0142 está pronto','Chegaram 6 pelúcias de unicórnio','Anote um pedido por telefone: Rubén, 2 quebra-cabeças, retira amanhã'],
+ord:{pend:'Aguardando confirmação',conf:'Confirmado',prep:'Em preparação',listo:'Pronto',entr:'Entregue',canc:'Cancelado'},
+av:{sinver:'Não verificado',reserv:'Reservado 24 h',confloc:'Confirmado pela loja',sinstock:'Sem estoque'},
+pay:{sinpagar:'Não pago',comprob:'Comprovante recebido',acred:'Pago'},
+cv:{bot:'Bot atendendo',derivada:'Aguarda uma pessoa',persona:'Pessoa atendendo',cliente:'Aguarda o cliente',resuelta:'Resolvida'},
+pickup:'retirada',ship:'entrega',phone:'telefone',
+dollSay:(w,n)=> w? `${w} ${w>1?'conversas aguardam':'conversa aguarda'} uma pessoa${n?` (${n})`:''}. Vamos ver?` : 'Todas as conversas têm resposta.',
+horseSay:(r,n)=> r? `${r} ${r>1?'pedidos':'pedido'} para retirar hoje.${n?` O de ${n} leva embrulho.`:''}` : 'Nenhuma retirada hoje.',
+rushSay:'Modo pico: primeiro o que tem horário combinado.'}
+};
+let lang = store.get('lang','es'); if(!L[lang]) lang='es';
+const T = k=>L[lang][k];
+const LANGNAME = {es:'español rioplatense',en:'English',pt:'português do Brasil'};
+
+/* ---------- datos de ejemplo (una sola memoria) ---------- */
+const S = {
+ products:[
+  {code:'KC-08',name:'Kit de ciencia Pequeños Químicos',age:8,price:27500,stock:4,trust:'al día',reserved:1,color:'#3b78ec'},
+  {code:'MI-06',name:'Microscopio de juguete',age:6,price:26900,stock:2,trust:'al día',reserved:0,color:'#1a9e52'},
+  {code:'PU-00',name:'Peluche de unicornio',age:0,price:15900,stock:0,trust:'al día',reserved:0,color:'#ff6f9f',wait:['Lucía','Tomás']},
+  {code:'RC-10',name:'Rompecabezas 500 piezas',age:10,price:18000,stock:12,trust:'manual',reserved:0,color:'#9460ee'},
+  {code:'BL-04',name:'Bloques de construcción 120 piezas',age:4,price:32000,stock:3,trust:'al día',reserved:0,color:'#f2b21e'},
+  {code:'MA-03',name:'Muñeca articulada',age:3,price:24500,stock:1,trust:'al día',reserved:0,color:'#ea4747'},
+  {code:'CM-02',name:'Caballito mecedora de madera',age:2,price:89000,stock:2,trust:'manual',reserved:0,color:'#d6873f'},
+  {code:'PA-05',name:'Pista de autos',age:5,price:45000,stock:5,trust:'al día',reserved:0,color:'#f3843a'},
+  {code:'JT-03',name:'Juego de té',age:3,price:12900,stock:7,trust:'al día',reserved:0,color:'#16a3a3'}
+ ],
+ orders:[
+  {n:'J-0141',client:'Laura Gómez',items:[['MA-03',1]],deliv:'pickup',st:'listo',av:'confloc',pay:'acred',who:'Sofi',wrap:true,origin:'wa',note:'17 h'},
+  {n:'J-0142',client:'Martín Ruiz',items:[['KC-08',1]],deliv:'pickup',st:'conf',av:'reserv',pay:'sinpagar',who:'Sofi',origin:'wa'},
+  {n:'J-0143',client:'Carla Pérez',items:[['PA-05',1],['JT-03',1]],deliv:'ship',st:'prep',av:'confloc',pay:'comprob',who:'Nico',origin:'wa'},
+  {n:'J-0144',client:'Rubén Díaz',items:[['RC-10',2]],deliv:'pickup',st:'pend',av:'sinver',pay:'sinpagar',who:'',origin:'phone'},
+  {n:'J-0140',client:'Ana Torres',items:[['BL-04',1]],deliv:'pickup',st:'entr',av:'confloc',pay:'acred',who:'Nico',origin:'wa'}
+ ],
+ convs:[
+  {who:'Diego',st:'derivada',last:'Quiero hablar con alguien por un cambio',mins:6},
+  {who:'Paula',st:'cliente',last:'Le mandé el resumen del Juego de té; espera su confirmación',mins:12},
+  {who:'Jorge',st:'bot',last:'¿Hacen envíos a Funes?',mins:1}
+ ],
+ recs:7, snoozed:{}, resolved:{}, seq:145
+};
+const P = code=>S.products.find(p=>p.code===code);
+const money = v=>'$'+v.toLocaleString('es-AR');
+
+/* ---------- asistentes ---------- */
+const BOTS = [
+ {id:'atencion',name:{es:'Atención',en:'Care',pt:'Atendimento'},color:'var(--red)',home:'doll',
+  does:{es:'Responde a clientes por WhatsApp, recomienda por edad y presupuesto, deriva a una persona.',en:'Answers customers on WhatsApp, suggests by age and budget, hands off to a person.',pt:'Responde clientes no WhatsApp, recomenda por idade e orçamento, encaminha para uma pessoa.'}},
+ {id:'pedidos',name:{es:'Pedidos',en:'Orders',pt:'Pedidos'},color:'var(--yellow)',home:'horse',
+  does:{es:'Arma el pedido, muestra el resumen con el total, pide confirmación y le da número único.',en:'Builds the order, shows the total, asks for confirmation and assigns a unique number.',pt:'Monta o pedido, mostra o total, pede confirmação e dá um número único.'}},
+ {id:'stock',name:{es:'Stock',en:'Stock',pt:'Estoque'},color:'var(--blue)',home:'horse',
+  does:{es:'Cuida precios y unidades, reserva 24 h y pregunta al local cuando el stock es manual.',en:'Keeps prices and units, reserves for 24 h and asks the store when stock is manual.',pt:'Cuida de preços e unidades, reserva por 24 h e pergunta à loja quando o estoque é manual.'}},
+ {id:'local',name:{es:'Local',en:'Store',pt:'Loja'},color:'var(--violet)',home:'both',
+  does:{es:'Habla con el equipo por texto o voz, carga pedidos telefónicos y coordina responsables.',en:'Talks with the team by text or voice, logs phone orders and assigns people.',pt:'Fala com a equipe por texto ou voz, registra pedidos por telefone e coordena responsáveis.'}},
+ {id:'vendedores',name:{es:'Vendedores',en:'Sellers',pt:'Vendedores'},color:'var(--teal)',home:'horse',
+  does:{es:'Conecta con la app de cada vendedor: les manda lo que hay que preparar o atender y ve si avanzaron.',en:'Connects to each seller app: sends what to prepare or handle and sees if they moved it forward.',pt:'Conecta com o app de cada vendedor: manda o que preparar ou atender e vê se avançaram.'}},
+ {id:'seguimiento',name:{es:'Seguimiento',en:'Follow-up',pt:'Acompanhamento'},color:'var(--orange)',home:'doll',
+  does:{es:'Avisa al cliente cuando el pedido está confirmado o listo y alerta lo que se demora.',en:'Tells customers when orders are confirmed or ready and flags delays.',pt:'Avisa o cliente quando o pedido está confirmado ou pronto e alerta atrasos.'}}
+];
+const tr=o=>typeof o==='string'?o:(o[lang]||o.es);
+const B=id=>BOTS.find(b=>b.id===id);
+const HEX={atencion:0xea4747,pedidos:0xf2b21e,stock:0x3b78ec,local:0x9460ee,seguimiento:0xf3843a,vendedores:0x159c9c};
+BOTS.forEach(b=>b.hex=HEX[b.id]);
+/* ---------- escena principal 3D ---------- */
+const stageEl=$('#stage'), canvas=$('#gl'), ov=$('#ov');
+const botEls={};
+BOTS.forEach(b=>{const a=document.createElement('div');a.className='anchor';a.innerHTML='<div class="blbl"><span class="tip"></span><span class="nm"></span></div>';ov.appendChild(a);botEls[b.id]=a.firstChild;botEls[b.id]._a=a;});
+const M=(c,o)=>new THREE.MeshStandardMaterial(Object.assign({color:c,roughness:.5,metalness:.02},o||{}));
+function addTo(g,geo,mat,x,y,z,rx,ry,rz,sx,sy,sz){const m=new THREE.Mesh(geo,mat);m.position.set(x,y,z);m.rotation.set(rx||0,ry||0,rz||0);if(sx)m.scale.set(sx,sy,sz);g.add(m);return m;}
+let G=null;
+try{ if(window.THREE) G=init3D(); }catch(e){ G=null; }
+if(!G){ canvas.hidden=true; const d=document.createElement('div'); d.className='nogl'; d.textContent=tr({es:'Este navegador no puede mostrar la escena 3D. El resto del panel funciona igual.',en:'This browser cannot show the 3D scene. The rest still works.',pt:'Este navegador não mostra a cena 3D. O resto funciona igual.'}); stageEl.appendChild(d); }
+
+function init3D(){
+  const renderer=new THREE.WebGLRenderer({canvas,antialias:true,alpha:true});
+  renderer.setPixelRatio(Math.min(devicePixelRatio||1,2));
+  const scene=new THREE.Scene(), camera=new THREE.PerspectiveCamera(36,1,.1,200);
+  scene.add(new THREE.HemisphereLight(0xffffff,0x8a93b8,.9));
+  const sun=new THREE.DirectionalLight(0xffffff,.75); sun.position.set(5,10,8); scene.add(sun);
+  const fill=new THREE.DirectionalLight(0xbfd2ff,.3); fill.position.set(-8,4,-6); scene.add(fill);
+  const world=new THREE.Group(); scene.add(world); const sys=new THREE.Group(); world.add(sys);
+  const floorMat=new THREE.MeshStandardMaterial({color:0xffffff,roughness:1,transparent:true,opacity:.55});
+  const floor=new THREE.Mesh(new THREE.CircleGeometry(6.8,72),floorMat); floor.rotation.x=-Math.PI/2; floor.scale.set(1,.74,1); floor.position.y=-.01; sys.add(floor);
+  const RX=5.7, RZ=4.0, OY=1.25;
+  const ringPts=[]; for(let i=0;i<=128;i++){const t=i/128*Math.PI*2; ringPts.push(new THREE.Vector3(RX*Math.cos(t),.03,RZ*Math.sin(t)));}
+  const ring=new THREE.Line(new THREE.BufferGeometry().setFromPoints(ringPts),new THREE.LineDashedMaterial({color:0x7d8bc0,dashSize:.22,gapSize:.16,transparent:true,opacity:.7})); ring.computeLineDistances(); sys.add(ring);
+
+  const doll=new THREE.Group(); doll.position.set(-1.9,0,0); sys.add(doll);
+  const skin=M(0xffd9c4), hair=M(0x6e3524,{roughness:.7}), pink=M(0xff6f9f), dark=new THREE.MeshBasicMaterial({color:0x1d1a2e}), rose=M(0xe83a6c);
+  addTo(doll,new THREE.ConeGeometry(1.05,1.85,40),pink,0,1.28,0);
+  addTo(doll,new THREE.TorusGeometry(1.0,.055,8,48),M(0xffffff),0,.42,0,Math.PI/2);
+  [-.26,.26].forEach(x=>{addTo(doll,new THREE.CylinderGeometry(.1,.1,.4,12),skin,x,.2,0);addTo(doll,new THREE.SphereGeometry(.16,16,12),rose,x,.06,.06,0,0,0,1,.6,1.5);});
+  addTo(doll,new THREE.CylinderGeometry(.085,.085,.95,12),skin,-.62,1.72,0,0,0,-.55);
+  const armR=addTo(doll,new THREE.CylinderGeometry(.085,.085,.95,12),skin,.62,1.72,0,0,0,.55);
+  addTo(doll,new THREE.CylinderGeometry(.13,.15,.2,12),skin,0,2.22,0);
+  const head=new THREE.Group(); head.position.set(0,2.68,0); doll.add(head);
+  addTo(head,new THREE.SphereGeometry(.7,32,24),hair,0,.1,-.17);
+  addTo(head,new THREE.SphereGeometry(.62,32,24),skin,0,0,.05);
+  addTo(head,new THREE.SphereGeometry(.64,32,24,0,Math.PI*2,0,Math.PI*.38),hair,0,.04,.06,-.35);
+  [-1,1].forEach(s=>addTo(head,new THREE.SphereGeometry(.28,20,16),hair,s*.74,-.02,-.05));
+  [-1,1].forEach(s=>addTo(head,new THREE.ConeGeometry(.15,.32,16),rose,s*.2,.68,.05,0,0,s*Math.PI/2));
+  addTo(head,new THREE.SphereGeometry(.09,12,10),rose,0,.68,.05);
+  [-1,1].forEach(s=>{addTo(head,new THREE.SphereGeometry(.075,12,10),dark,s*.21,.04,.6);addTo(head,new THREE.SphereGeometry(.1,12,10),M(0xff9db8),s*.36,-.13,.52,0,0,0,1,.6,.4);});
+  addTo(head,new THREE.TorusGeometry(.13,.025,8,16,Math.PI),M(0xb23a55),0,-.16,.62,0,0,Math.PI);
+
+  const horse=new THREE.Group(); horse.position.set(2.15,0,0); sys.add(horse);
+  const horseBody=new THREE.Group(); horse.add(horseBody);
+  const wood=M(0xd6873f), woodD=M(0x8c4f1e), red=M(0xe8483f), arc=1.15;
+  [-.5,.5].forEach(z=>addTo(horseBody,new THREE.TorusGeometry(2.7,.09,10,48,arc),woodD,0,2.82,z,0,0,-Math.PI/2-arc/2));
+  [[-.75,-.5],[-.75,.5],[.75,-.5],[.75,.5]].forEach(([x,z])=>addTo(horseBody,new THREE.CylinderGeometry(.09,.09,1.05,12),wood,x,.62,z*.9,z>0?.12:-.12,0,x>0?-.15:.15));
+  addTo(horseBody,new THREE.SphereGeometry(1,40,28),wood,0,1.42,0,0,0,0,1.3,.6,.58);
+  addTo(horseBody,new THREE.CylinderGeometry(.24,.32,1.05,16),wood,1.08,2.02,0,0,0,-.6);
+  addTo(horseBody,new THREE.SphereGeometry(1,28,20),wood,1.55,2.5,0,0,0,-.35,.58,.34,.32);
+  [-1,1].forEach(s=>{addTo(horseBody,new THREE.ConeGeometry(.08,.26,10),woodD,1.32,2.86,s*.12,0,0,.15);addTo(horseBody,new THREE.SphereGeometry(.055,10,8),dark,1.68,2.6,s*.27);});
+  for(let i=0;i<6;i++){const t=i/5; addTo(horseBody,new THREE.BoxGeometry(.2,.16,.14),red,.63+t*.55,2.04+t*.78,0,0,0,-.6);}
+  addTo(horseBody,new THREE.ConeGeometry(.2,.8,14),red,-1.38,1.55,0,0,0,1.15);
+  addTo(horseBody,new THREE.CylinderGeometry(.62,.62,.06,24,1,false,0,Math.PI),M(0x3b78ec),0,1.98,0,0,Math.PI/2,0,1,1,1.05);
+
+  const studG=new THREE.CylinderGeometry(.15,.15,.14,20); const bots={};
+  BOTS.forEach((b,i)=>{
+    const g=new THREE.Group(); const body=new THREE.Group(); g.add(body);
+    const mat=M(b.hex,{roughness:.4,emissive:b.hex,emissiveIntensity:0});
+    body.add(new THREE.Mesh(new THREE.BoxGeometry(.95,.8,.95),mat));
+    [[.24,.24],[-.24,.24],[.24,-.24],[-.24,-.24]].forEach(([x,z])=>{const s=new THREE.Mesh(studG,mat);s.position.set(x,.47,z);body.add(s);});
+    const white=M(0xffffff,{roughness:.3});
+    [-.19,.19].forEach(x=>{const e=new THREE.Mesh(new THREE.SphereGeometry(.11,16,12),white);e.position.set(x,.08,.48);e.scale.z=.5;body.add(e);const p=new THREE.Mesh(new THREE.SphereGeometry(.05,10,8),dark);p.position.set(x,.07,.53);body.add(p);});
+    g.traverse(o=>o.userData.bot=b.id); sys.add(g);
+    bots[b.id]={g,body,mat,base:i*Math.PI*2/BOTS.length,work:0,phase:Math.random()*6,held:null,back:false,ges:null};
+  });
+  doll.traverse(o=>o.userData.char='doll'); horse.traverse(o=>o.userData.char='horse');
+  const chars={doll:{g:doll,ges:null},horse:{g:horse,ges:null}};
+  const saved=store.get('charpos',null); if(saved){doll.position.set(saved.d[0],0,saved.d[1]);horse.position.set(saved.h[0],0,saved.h[1]);}
+
+  const glow=(()=>{const c=document.createElement('canvas');c.width=c.height=64;const x=c.getContext('2d');const gr=x.createRadialGradient(32,32,0,32,32,32);gr.addColorStop(0,'rgba(255,255,255,1)');gr.addColorStop(.4,'rgba(255,255,255,.45)');gr.addColorStop(1,'rgba(255,255,255,0)');x.fillStyle=gr;x.fillRect(0,0,64,64);return new THREE.CanvasTexture(c);})();
+  const pulses=[];
+  function pulse(id){
+    const b=B(id), bo=bots[id];
+    (b.home==='both'?[doll,horse]:[b.home==='doll'?doll:horse]).forEach(h=>{
+      const a=bo.g.position.clone(), z=h.position.clone().add(new THREE.Vector3(0,1.6,0)); const mid=a.clone().add(z).multiplyScalar(.5); mid.y+=1.6;
+      const core=new THREE.Mesh(new THREE.SphereGeometry(.13,14,10),new THREE.MeshBasicMaterial({color:b.hex}));
+      const sp=new THREE.Sprite(new THREE.SpriteMaterial({map:glow,color:b.hex,transparent:true,depthWrite:false,blending:THREE.AdditiveBlending}));sp.scale.set(.9,.9,.9);core.add(sp);
+      sys.add(core); pulses.push({core,curve:new THREE.QuadraticBezierCurve3(a,mid,z),t0:performance.now(),dur:reduce?300:1100});
+    });
+  }
+  const GES=['flip','spin','jump','wiggle'];
+  function gesture(kind,id,type){ const o=kind==='bot'?bots[id]:chars[id]; o.ges={type:type||(kind==='bot'?GES[Math.floor(Math.random()*GES.length)]:(id==='doll'?'wave':'rock')),t0:performance.now(),dur:kind==='bot'?900:1400}; }
+
+  let rotY=-.12, tilt=0, vel=0, drag=null, tOrb=0;
+  const ray=new THREE.Raycaster(), ptr=new THREE.Vector2(), ground=new THREE.Plane(new THREE.Vector3(0,1,0),0);
+  const ndc=e=>{const r=canvas.getBoundingClientRect();ptr.set((e.clientX-r.left)/r.width*2-1,-(e.clientY-r.top)/r.height*2+1);};
+  const groundLocal=e=>{ndc(e);ray.setFromCamera(ptr,camera);const p=new THREE.Vector3();return ray.ray.intersectPlane(ground,p)?sys.worldToLocal(p):null;};
+  const pick=e=>{ndc(e);ray.setFromCamera(ptr,camera);const h=ray.intersectObjects(sys.children,true).find(h=>h.object.userData.bot||h.object.userData.char);return h?h.object.userData:null;};
+  canvas.addEventListener('pointerdown',e=>{
+    const u=pick(e); const gp=groundLocal(e);
+    drag={x:e.clientX,y:e.clientY,moved:false,u};
+    if(u&&u.char){const g=chars[u.char].g; drag.off=gp?new THREE.Vector3(g.position.x-gp.x,0,g.position.z-gp.z):new THREE.Vector3();}
+    canvas.setPointerCapture(e.pointerId); $('#hint').hidden=true;
+  });
+  canvas.addEventListener('pointermove',e=>{
+    if(!drag){ canvas.style.cursor=pick(e)?'pointer':''; return; }
+    if(!drag.moved && Math.hypot(e.clientX-drag.x,e.clientY-drag.y)<6) return;
+    drag.moved=true; stageEl.classList.add('dragging');
+    const u=drag.u;
+    if(u&&u.bot){const p=groundLocal(e); if(p){bots[u.bot].held=new THREE.Vector3(Math.max(-7,Math.min(7,p.x)),1.9,Math.max(-5,Math.min(5,p.z)));}}
+    else if(u&&u.char){const p=groundLocal(e); if(p){const g=chars[u.char].g; g.position.x=Math.max(-5,Math.min(5,p.x+drag.off.x)); g.position.z=Math.max(-3.2,Math.min(3.2,p.z+drag.off.z));}}
+    else { rotY+=(e.movementX||0)*.006; vel=(e.movementX||0)*.006; tilt=Math.max(-.22,Math.min(.35,tilt+(e.movementY||0)*.003)); }
+  });
+  const up=()=>{ if(!drag) return; stageEl.classList.remove('dragging'); const u=drag.u;
+    if(!drag.moved && u){ if(u.bot){gesture('bot',u.bot,'flip'); setTimeout(()=>openBot(B(u.bot)),reduce?0:350);} else {gesture('char',u.char); toggleDash(u.char);} }
+    if(drag.moved && u&&u.bot){ bots[u.bot].held=null; bots[u.bot].back=true; gesture('bot',u.bot,'spin'); }
+    if(drag.moved && u&&u.char){ store.set('charpos',{d:[doll.position.x,doll.position.z],h:[horse.position.x,horse.position.z]}); gesture('char',u.char); }
+    drag=null; };
+  canvas.addEventListener('pointerup',up); canvas.addEventListener('pointercancel',()=>{if(drag&&drag.u&&drag.u.bot){bots[drag.u.bot].held=null;bots[drag.u.bot].back=true;}drag=null;stageEl.classList.remove('dragging');});
+
+  let camDist=13.2;
+  function resize(){const w=stageEl.clientWidth,h=stageEl.clientHeight;renderer.setSize(w,h,false);camera.aspect=w/h;camDist=w<520?25:w<820?17:13.2;camera.updateProjectionMatrix();}
+  resize(); addEventListener('resize',resize);
+  function themeFloor(){const c=getComputedStyle(document.documentElement).getPropertyValue('--surface').trim()||'#ffffff';try{floorMat.color.set(c);}catch(e){}}
+  themeFloor(); matchMedia('(prefers-color-scheme: dark)').addEventListener('change',themeFloor);
+  const tmp=new THREE.Vector3(), tgt=new THREE.Vector3();
+  const proj=(obj,x,y,z)=>{tmp.set(x,y,z);obj.localToWorld(tmp);tmp.project(camera);return[(tmp.x*.5+.5)*stageEl.clientWidth,(-tmp.y*.5+.5)*stageEl.clientHeight];};
+  function setA(el,p,k,cl){ if(cl){const W=stageEl.clientWidth;p[0]=Math.max(cl,Math.min(W-cl,p[0]));if(cl>=90)p[1]=Math.max(cl>100?150:120,p[1]);} el.style.transform='translate('+p[0].toFixed(1)+'px,'+p[1].toFixed(1)+'px)'; if(k!==undefined) el.firstElementChild.style.setProperty('--k',k.toFixed(3)); }
+  const ease=k=>k<.5?2*k*k:1-Math.pow(-2*k+2,2)/2;
+
+  if(!reduce){ setInterval(()=>{ const b=BOTS[Math.floor(Math.random()*BOTS.length)]; if(!bots[b.id].held&&!bots[b.id].ges) gesture('bot',b.id); },2400);
+    setInterval(()=>gesture('char',Math.random()<.5?'doll':'horse'),7000); }
+
+  let last=performance.now();
+  function frame(now){
+    const dt=Math.min(64,now-last); last=now;
+    if(!reduce) tOrb+=dt*.00022;
+    if(!drag && Math.abs(vel)>1e-4){rotY+=vel;vel*=.92;}
+    world.rotation.y=rotY;
+    camera.position.set(0,camDist*(.4+tilt),camDist); camera.lookAt(0,1.55,0);
+    const t=now/1000;
+    const cx=(doll.position.x+horse.position.x)/2, cz=(doll.position.z+horse.position.z)/2;
+    ring.position.set(cx,0,cz); floor.position.x=cx; floor.position.z=cz;
+    BOTS.forEach(b=>{
+      const o=bots[b.id], th=o.base+tOrb;
+      tgt.set(cx+RX*Math.cos(th), OY+(reduce?0:Math.sin(t*1.6+o.phase)*.12)+o.work*Math.abs(Math.sin(t*9))*.3, cz+RZ*Math.sin(th));
+      if(o.held) o.g.position.lerp(o.held,.35);
+      else if(o.back){ o.g.position.lerp(tgt,.08); if(o.g.position.distanceTo(tgt)<.05) o.back=false; }
+      else o.g.position.copy(tgt);
+      o.g.rotation.y=Math.atan2(o.g.position.x-cx,o.g.position.z-cz)+(reduce?0:Math.sin(t*.8+o.phase)*.25);
+      o.body.rotation.set(0,0,0); o.body.position.y=0;
+      if(o.ges){const k=Math.min(1,(now-o.ges.t0)/o.ges.dur),e=ease(k);
+        if(o.ges.type==='flip'){o.body.rotation.x=e*Math.PI*2;o.body.position.y=Math.sin(Math.PI*k)*1.1;}
+        else if(o.ges.type==='spin'){o.body.rotation.y=e*Math.PI*2;o.body.position.y=Math.sin(Math.PI*k)*.4;}
+        else if(o.ges.type==='jump'){o.body.position.y=Math.abs(Math.sin(Math.PI*2*k))*.8;}
+        else {o.body.rotation.z=Math.sin(k*Math.PI*6)*.35*(1-k);}
+        if(k>=1)o.ges=null;}
+      o.work=Math.max(0,o.work-dt/2600); o.mat.emissiveIntensity=.06+o.work*.5;
+      const s=1+o.work*.15; o.g.scale.set(s,s,s);
+    });
+    const dg=chars.doll.ges, hg=chars.horse.ges;
+    doll.rotation.y=reduce?0:Math.sin(t*.7)*.08; doll.position.y=0; armR.rotation.z=.55; head.rotation.z=reduce?0:Math.sin(t*1.1)*.06;
+    if(dg){const k=Math.min(1,(now-dg.t0)/dg.dur); armR.rotation.z=.55+2.0*Math.sin(Math.PI*k)+Math.sin(k*Math.PI*8)*.3*Math.sin(Math.PI*k); doll.rotation.y+=ease(k)*Math.PI*2; doll.position.y=Math.sin(Math.PI*k)*.5; if(k>=1)chars.doll.ges=null;}
+    horseBody.rotation.z=reduce?0:Math.sin(t*1.3)*.06;
+    if(hg){const k=Math.min(1,(now-hg.t0)/hg.dur); horseBody.rotation.z=Math.sin(k*Math.PI*5)*.32*(1-k*.6); if(k>=1)chars.horse.ges=null;}
+    for(let i=pulses.length-1;i>=0;i--){const p=pulses[i];const k=Math.min(1,(now-p.t0)/p.dur);p.core.position.copy(p.curve.getPoint(ease(k)));if(k>=1){sys.remove(p.core);pulses.splice(i,1);}}
+    renderer.render(scene,camera);
+    const k=Math.max(.56,Math.min(1.1,13.2/camDist*(stageEl.clientWidth<520?1.15:1))), half=stageEl.clientWidth<520?96:136;
+    setA($('#aDollSay'),proj(doll,0,3.75,0),undefined,half);
+    setA($('#aHorseSay'),proj(horse,.9,3.35,0),undefined,half);
+    setA($('#aDollScr'),proj(doll,0,0,1.15),k);
+    setA($('#aHorseScr'),proj(horse,0,0,1.0),k);
+    BOTS.forEach(b=>{const o=bots[b.id];setA(botEls[b.id]._a,proj(o.g,0,-.62,0),undefined,stageEl.clientWidth<520?80:0);});
+    requestAnimationFrame(frame);
+  }
+  requestAnimationFrame(frame);
+  return {pulse,bots,gesture,reset(){doll.position.set(-1.9,0,0);horse.position.set(2.15,0,0);rotY=-.12;tilt=0;store.set('charpos',null);BOTS.forEach(b=>{bots[b.id].back=true;});}};
+}
+function say(id,text,ms){
+  const el=botEls[id]; if(!el) return;
+  el.querySelector('.tip').textContent=tr(text); el.classList.add('talk');
+  if(G){G.bots[id].work=1; G.pulse(id); G.gesture('bot',id,'jump');}
+  clearTimeout(el._t); el._t=setTimeout(()=>el.classList.remove('talk'),ms||4200);
+}
+$('#resetBots').onclick=()=>{ if(G) G.reset(); };
+
+/* ---------- tablero en los personajes ---------- */
+function counts(){
+  const wait=S.convs.filter(c=>c.st==='derivada');
+  const active=S.orders.filter(o=>!['entr','canc'].includes(o.st));
+  const ready=S.orders.filter(o=>o.st==='listo');
+  return {wait, recs:S.recs, follow:S.convs.filter(c=>c.st!=='resuelta').length, orders:active.length, ready, res:S.orders.filter(o=>o.av==='reserv').length, low:S.products.filter(p=>p.stock<=1).length};
+}
+function pendientes(){
+  const out=[];
+  S.convs.filter(c=>c.st==='derivada').forEach(c=>out.push({id:'cv-'+c.who,kind:'crit',bot:'atencion',txt:{es:`${c.who} espera a una persona hace ${c.mins} min`,en:`${c.who} has waited ${c.mins} min for a person`,pt:`${c.who} aguarda uma pessoa há ${c.mins} min`}[lang],urg:3,go:'doll'}));
+  S.orders.filter(o=>o.av==='sinver'&&o.st==='pend').forEach(o=>out.push({id:'av-'+o.n,kind:'warn',bot:'stock',txt:{es:`${o.n}: confirmar si hay ${o.items.map(i=>i[1]+' × '+P(i[0]).name).join(', ')} (stock manual)`,en:`${o.n}: confirm ${o.items.map(i=>i[1]+' × '+P(i[0]).name).join(', ')} is in store (manual stock)`,pt:`${o.n}: confirmar se há ${o.items.map(i=>i[1]+' × '+P(i[0]).name).join(', ')} (estoque manual)`}[lang],urg:2,go:'horse',order:o.n}));
+  S.orders.filter(o=>o.pay==='comprob').forEach(o=>out.push({id:'pay-'+o.n,kind:'warn',bot:'pedidos',txt:{es:`${o.n}: verificar el comprobante de ${o.client}`,en:`${o.n}: check ${o.client}'s payment receipt`,pt:`${o.n}: verificar o comprovante de ${o.client}`}[lang],urg:1,go:'horse',order:o.n}));
+  S.orders.filter(o=>o.st==='listo').forEach(o=>out.push({id:'ret-'+o.n,kind:'',bot:'seguimiento',txt:{es:`${o.n}: ${o.client} retira hoy${o.note?' a las '+o.note:''}${o.wrap?' · con envoltorio':''}`,en:`${o.n}: ${o.client} picks up today${o.note?' at '+o.note:''}${o.wrap?' · gift wrap':''}`,pt:`${o.n}: ${o.client} retira hoje${o.note?' às '+o.note:''}${o.wrap?' · com embrulho':''}`}[lang],urg:o.note?4:1,go:'horse',order:o.n}));
+  S.products.filter(p=>p.stock<=1).forEach(p=>out.push({id:'low-'+p.code,kind:'',bot:'stock',txt:{es:`Stock bajo: ${p.name} (${p.stock})${p.wait?' · '+p.wait.length+' en lista de espera':''}`,en:`Low stock: ${p.name} (${p.stock})${p.wait?' · '+p.wait.length+' waiting':''}`,pt:`Estoque baixo: ${p.name} (${p.stock})${p.wait?' · '+p.wait.length+' na lista de espera':''}`}[lang],urg:0,go:'horse'}));
+  (S.reqs||[]).filter(r=>r.st==='pend').forEach(r=>out.push({id:'rq-'+r.id,kind:'warn',bot:'vendedores',txt:{es:`${r.to} todavía no tomó: ${REQ[r.what].es}${r.ref?' '+r.ref:''}`,en:`${r.to} has not started: ${REQ[r.what].en}${r.ref?' '+r.ref:''}`,pt:`${r.to} ainda não começou: ${REQ[r.what].pt}${r.ref?' '+r.ref:''}`}[lang],urg:2,go:'sellers'}));
+  let list = out.filter(p=>!S.resolved[p.id]);
+  const now=Date.now(); list=list.filter(p=>!(S.snoozed[p.id]>now));
+  if(rush) list.sort((a,b)=>b.urg-a.urg);
+  return list;
+}
+let rush=false;
+function renderBoard(){
+  const c=counts();
+  $('#dollScreen').innerHTML=
+    stat(c.wait.length,T('sWait'),c.wait.length>0)+stat(c.recs,T('sRecs'))+stat(c.follow,T('sFollow'));
+  $('#horseScreen').innerHTML=
+    stat(c.orders,T('sOrders'))+stat(c.ready.length,T('sReady'))+stat(c.res,T('sRes'))+stat(c.low,T('sLow'),c.low>0);
+  const wrapName = (c.ready.find(o=>o.wrap)||{}).client;
+  $('#dollSay').innerHTML='<b>'+T('dollTitle')+'</b>'+T('dollSay')(c.wait.length, c.wait.map(w=>w.who).join(', '));
+  $('#horseSay').innerHTML='<b>'+T('horseTitle')+'</b>'+T('horseSay')(c.ready.length, wrapName? wrapName.split(' ')[0]:'')+(rush?'<br><span class="muted">'+T('rushSay')+'</span>':'');
+  $('#pendCount').textContent=pendientes().length;
+  $('#pendCount').hidden = pendientes().length===0;
+  if(drawerView) refreshDrawer();
+}
+const stat=(n,l,alert)=>'<div class="stat'+(alert?' alert':'')+'"><strong>'+n+'</strong><span>'+l+'</span></div>';
+
+/* ---------- actividad ---------- */
+const feed=[];
+function log(bot,text,kind){ feed.unshift({bot,text,kind,at:new Date()}); renderFeed(); }
+function renderFeed(){
+  const ol=$('#feed'); ol.innerHTML='';
+  if(!feed.length){ ol.innerHTML='<li style="display:block" class="muted">'+{es:'Acá aparece lo que los asistentes hacen solos y lo que confirmás vos.',en:'What assistants do on their own and what you confirm shows up here.',pt:'Aqui aparece o que os assistentes fazem sozinhos e o que você confirma.'}[lang]+'</li>'; return; }
+  feed.slice(0,30).forEach(f=>{
+    const bb=BOTS.find(x=>x.id===f.bot);
+    const li=document.createElement('li');
+    const t=typeof f.text==='object'?f.text[lang]:f.text;
+    li.innerHTML='<span class="dot" style="background:'+bb.color+'"></span><span><strong>'+bb.name[lang]+'</strong> '+esc(t)+'</span><time>'+f.at.toLocaleTimeString(lang==='en'?'en-US':lang==='pt'?'pt-BR':'es-AR',{hour:'2-digit',minute:'2-digit'})+'</time>';
+    ol.appendChild(li);
+  });
+}
+function esc(s){return String(s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));}
+
+/* ---------- panel lateral ---------- */
+const drawer=$('#drawer'), dBody=$('#dBody'), scrim=$('#scrim');
+let drawerView=null, chatBot=null;
+function openDrawer(view,arg){
+  drawerView=view; chatBot = view==='talk'? (arg||null) : chatBot;
+  drawer.classList.add('open'); drawer.setAttribute('aria-hidden','false'); scrim.classList.add('on');
+  $('#dFoot').hidden = view!=='talk';
+  refreshDrawer(true);
+  setTimeout(()=>{ (view==='talk'?$('#chatIn'):$('#dClose')).focus(); },reduce?0:250);
+}
+function closeDrawer(){drawer.classList.remove('open');drawer.setAttribute('aria-hidden','true');scrim.classList.remove('on');drawerView=null;}
+$('#dClose').onclick=closeDrawer; scrim.onclick=closeDrawer;
+addEventListener('keydown',e=>{if(e.key==='Escape'&&drawerView)closeDrawer();});
+$('#bTalk').onclick=()=>openDrawer('talk');
+$('#bPend').onclick=()=>openDrawer('pend');
+$('#bFind').onclick=()=>openDrawer('find');
+$('#dollScreen').onclick=()=>openDrawer('doll');
+$('#horseScreen').onclick=()=>openDrawer('horse');
+function openBot(b){ if(b.id==='vendedores') openDrawer('sellers'); else openDrawer('talk',b.id); }
+
+const chat=[]; // {role:'me'|'ai'|'note'|'prop', ...}
+function refreshDrawer(first){
+  const v=drawerView;
+  if(v==='talk'){ $('#dTitle').textContent = chatBot? BOTS.find(b=>b.id===chatBot).name[lang] : T('talkTitle'); renderChat(); return; }
+  if(v==='pend'){ $('#dTitle').textContent=T('pendTitle'); renderPend(); return; }
+  if(v==='find'){ $('#dTitle').textContent=T('findTitle'); if(first) renderFind(); return; }
+  if(v==='doll'){ $('#dTitle').textContent=T('dollTitle'); renderDoll(); return; }
+  if(v==='horse'){ $('#dTitle').textContent=T('horseTitle'); renderHorse(); return; }
+  if(v==='sellers'){ $('#dTitle').textContent=tr({es:'Vendedores',en:'Sellers',pt:'Vendedores'}); if(first||!document.getElementById('sTo')) renderSellers(); else renderReqs(); return; }
+}
+const pillsOf=o=>'<div class="pills"><span class="pill '+({listo:'good',entr:'good',canc:'crit',pend:'warn'}[o.st]||'')+'">'+T('ord')[o.st]+'</span><span class="pill '+({reserv:'warn',sinver:'warn',confloc:'good',sinstock:'crit'}[o.av]||'')+'">'+T('av')[o.av]+'</span><span class="pill '+({acred:'good',comprob:'warn'}[o.pay]||'')+'">'+T('pay')[o.pay]+'</span></div>';
+
+function renderPend(){
+  const list=pendientes();
+  dBody.innerHTML = list.length? '' : '<p class="muted">'+T('empty')+'</p>';
+  list.forEach(p=>{
+    const b=BOTS.find(x=>x.id===p.bot);
+    const d=document.createElement('div'); d.className='item';
+    d.innerHTML='<div class="row"><span><span class="pill '+p.kind+'" style="margin-right:6px">'+b.name[lang]+'</span></span></div><div>'+esc(p.txt)+'</div><div class="acts"><button class="btn small main" data-a="open">'+T('open')+'</button><button class="btn small" data-a="solve">'+T('solve')+'</button></div>';
+    d.querySelector('[data-a=open]').onclick=()=>openDrawer(p.go);
+    d.querySelector('[data-a=solve]').onclick=()=>{S.resolved[p.id]=1; log(p.bot,{es:'marcó un pendiente como resuelto',en:'marked a to-do as resolved',pt:'marcou uma pendência como resolvida'},'you'); renderBoard();};
+    dBody.appendChild(d);
+  });
+}
+function renderDoll(){
+  dBody.innerHTML='<div class="sec">'+T('convs')+'</div>';
+  S.convs.forEach(c=>{
+    const d=document.createElement('div'); d.className='item';
+    const cls={derivada:'crit',persona:'warn',resuelta:'good'}[c.st]||'';
+    d.innerHTML='<div class="row"><strong>'+esc(c.who)+'</strong><span class="pill '+cls+'">'+T('cv')[c.st]+'</span></div><div class="muted">“'+esc(c.last)+'”</div><div class="acts"></div>';
+    const acts=d.querySelector('.acts');
+    if(c.st==='derivada'||c.st==='bot'){const b=document.createElement('button');b.className='btn small main';b.textContent=T('take');b.onclick=()=>{c.st='persona';log('atencion',{es:`pausó el bot con ${c.who}: ahora atiende una persona`,en:`paused the bot with ${c.who}: a person is answering`,pt:`pausou o bot com ${c.who}: agora atende uma pessoa`},'you');renderBoard();};acts.appendChild(b);}
+    if(c.st==='persona'){const b=document.createElement('button');b.className='btn small';b.textContent=T('giveBack');b.onclick=()=>{c.st='bot';log('atencion',{es:`retomó la conversación con ${c.who}`,en:`took back the conversation with ${c.who}`,pt:`retomou a conversa com ${c.who}`},'you');renderBoard();};acts.appendChild(b);}
+    dBody.appendChild(d);
+  });
+  dBody.insertAdjacentHTML('beforeend','<p class="muted">'+{es:`Recomendaciones de hoy: ${S.recs}. Atención respeta siempre la edad mínima del fabricante.`,en:`Suggestions today: ${S.recs}. Care always respects the maker's minimum age.`,pt:`Recomendações hoje: ${S.recs}. Atendimento respeita sempre a idade mínima do fabricante.`}[lang]+'</p>');
+}
+const NEXT={pend:'conf',conf:'prep',prep:'listo',listo:'entr'};
+function renderHorse(){
+  dBody.innerHTML='<div class="sec">'+T('orders')+'</div>';
+  S.orders.filter(o=>o.st!=='entr').forEach(o=>{
+    const d=document.createElement('div'); d.className='item';
+    d.innerHTML='<div class="row"><span class="num">'+o.n+'</span><strong>'+esc(o.client)+'</strong></div><div>'+o.items.map(i=>i[1]+' × '+esc(P(i[0]).name)).join(' · ')+'</div><div class="muted">'+(o.deliv==='ship'?T('ship'):T('pickup'))+(o.origin==='phone'?' · '+T('phone'):'')+(o.who?' · '+o.who:'')+(o.wrap?' · '+{es:'envoltorio',en:'gift wrap',pt:'embrulho'}[lang]:'')+'</div>'+pillsOf(o)+'<div class="acts"></div>';
+    const acts=d.querySelector('.acts');
+    if(o.st==='conf'||o.st==='prep'){const b=document.createElement('button');b.className='btn small';b.textContent=T('prepare');b.onclick=()=>renderPrep(o);acts.appendChild(b);}
+    if(NEXT[o.st] && o.st!=='prep'){const b=document.createElement('button');b.className='btn small main';b.textContent=T('advance')+' → '+T('ord')[NEXT[o.st]];
+      b.onclick=()=>{ if(o.st==='pend'&&o.av==='sinver'){o.av='confloc';} o.st=NEXT[o.st]; afterState(o); };acts.appendChild(b);}
+    dBody.appendChild(d);
+  });
+  dBody.insertAdjacentHTML('beforeend','<div class="sec">'+T('stockLow')+'</div>');
+  S.products.forEach(p=>{
+    const d=document.createElement('div'); d.className='item';
+    d.innerHTML='<div class="row"><strong>'+esc(p.name)+'</strong><span class="pill '+(p.stock===0?'crit':p.stock<=1?'warn':'')+'">'+p.stock+' u.</span></div><div class="muted">'+money(p.price)+' · '+p.age+'+ · stock '+p.trust+(p.reserved?' · '+p.reserved+' reserv.':'')+(p.wait?' · espera: '+p.wait.join(', '):'')+'</div>';
+    dBody.appendChild(d);
+  });
+}
+function renderPrep(o){
+  drawerView='prep';
+  dBody.innerHTML='<div class="sec">'+T('prepTitle')+' · '+o.n+'</div><p class="muted">'+T('prepHint')+'</p>';
+  o.items.forEach((i,k)=>{const p=P(i[0]);dBody.insertAdjacentHTML('beforeend','<label class="check"><input type="checkbox" class="pc" id="pc'+k+'"><span><strong>'+i[1]+' × '+esc(p.name)+'</strong><br><span class="muted">'+p.code+'</span></span></label>');});
+  if(o.wrap) dBody.insertAdjacentHTML('beforeend','<label class="check"><input type="checkbox" class="pc" id="pcw"><span>Envoltorio de regalo</span></label>');
+  const b=document.createElement('button');b.className='btn main';b.textContent=T('ord').listo;b.disabled=true;
+  dBody.appendChild(b);
+  dBody.querySelectorAll('.pc').forEach(c=>c.onchange=()=>{b.disabled=[...dBody.querySelectorAll('.pc')].some(x=>!x.checked);});
+  b.onclick=()=>{o.st='listo';afterState(o);};
+}
+function afterState(o){
+  log('pedidos',{es:`${o.n} pasó a ${L.es.ord[o.st]}`,en:`${o.n} moved to ${L.en.ord[o.st]}`,pt:`${o.n} passou para ${L.pt.ord[o.st]}`},'you');
+  if(o.st==='listo'){ setTimeout(()=>{say('seguimiento',{es:`Le avisé a ${o.client.split(' ')[0]}`,en:`Told ${o.client.split(' ')[0]}`,pt:`Avisei ${o.client.split(' ')[0]}`}[lang]);log('seguimiento',{es:`avisó a ${o.client} que ${o.n} está listo para retirar`,en:`told ${o.client} that ${o.n} is ready for pickup`,pt:`avisou ${o.client} que ${o.n} está pronto para retirar`},'auto');},900); }
+  if(o.st==='conf') { setTimeout(()=>log('seguimiento',{es:`envió a ${o.client} la confirmación de ${o.n}`,en:`sent ${o.client} the confirmation for ${o.n}`,pt:`enviou a ${o.client} a confirmação de ${o.n}`},'auto'),700); }
+  if(drawerView==='prep') drawerView='horse';
+  renderBoard();
+}
+function renderFind(){
+  dBody.innerHTML='<input id="findIn" placeholder="'+T('findPh')+'" style="border:1px solid var(--line);background:var(--surface-2);border-radius:14px;padding:11px 14px;min-height:46px;width:100%"><p class="muted">'+T('photoSearch')+'</p><div id="findRes" style="display:flex;flex-direction:column;gap:10px"></div>';
+  const inp=$('#findIn'); const go=()=>{
+    const q=inp.value.trim().toLowerCase(); const res=$('#findRes'); res.innerHTML='';
+    const prods=S.products.filter(p=>!q||p.name.toLowerCase().includes(q)||p.code.toLowerCase().includes(q));
+    const ords=q?S.orders.filter(o=>o.n.toLowerCase().includes(q)||o.client.toLowerCase().includes(q)):[];
+    ords.forEach(o=>{const d=document.createElement('div');d.className='item';d.innerHTML='<div class="row"><span class="num">'+o.n+'</span><strong>'+esc(o.client)+'</strong></div>'+pillsOf(o);res.appendChild(d);});
+    prods.forEach(p=>{const d=document.createElement('div');d.className='item';d.innerHTML='<div class="row"><strong>'+esc(p.name)+'</strong><span class="pill">'+p.stock+' u.</span></div><div class="muted">'+money(p.price)+' · '+p.age+'+ · '+p.code+'</div><div class="acts"><button class="btn small">'+T('show')+'</button></div>';
+      d.querySelector('button').onclick=()=>{showOnTV(p,null);closeDrawer();};res.appendChild(d);});
+  };
+  inp.oninput=go; go(); setTimeout(()=>inp.focus(),50);
+}
+
+/* ---------- conversación con los asistentes (texto / voz) ---------- */
+function renderChat(){
+  dBody.innerHTML='';
+  if(chatBot){const b=BOTS.find(x=>x.id===chatBot); dBody.insertAdjacentHTML('beforeend','<div class="msg note">'+esc(b.does[lang])+'</div>');}
+  if(!chat.length){
+    const s=document.createElement('div'); s.className='suggest';
+    T('sug').forEach(q=>{const b=document.createElement('button');b.textContent=q;b.onclick=()=>ask(q);s.appendChild(b);});
+    dBody.appendChild(s);
+  }
+  chat.forEach(m=>dBody.appendChild(m.el||(m.el=msgEl(m))));
+  dBody.scrollTop=dBody.scrollHeight;
+  $('#chatIn').placeholder=T('chatPh');
+}
+function msgEl(m){
+  const d=document.createElement('div');
+  if(m.role==='me'){d.className='msg me';d.textContent=m.text;}
+  else if(m.role==='note'){d.className='msg note';d.textContent=m.text;}
+  else if(m.role==='ai'){d.className='msg ai';updateAi(d,m);}
+  else if(m.role==='prop'){d.className='prop';propEl(d,m);}
+  return d;
+}
+function updateAi(d,m){
+  const b=BOTS.find(x=>x.id===m.bot)||BOTS[3];
+  d.innerHTML='<div class="who"><i style="background:'+b.color+'"></i>'+b.name[lang]+'</div><span></span>';
+  d.lastChild.textContent=m.text||'…';
+}
+function propEl(d,m){
+  d.innerHTML='<div class="st">'+T('propTitle')+'</div><div>'+esc(m.resumen)+'</div><div class="acts" style="display:flex;gap:8px"></div>';
+  const a=d.querySelector('.acts');
+  if(m.state){d.classList.add(m.state==='ok'?'done':'no');a.innerHTML='<span class="muted">'+(m.state==='ok'?T('applied'):T('declined'))+'</span>';return;}
+  const y=document.createElement('button');y.className='btn small main';y.textContent=T('confirm');
+  const n=document.createElement('button');n.className='btn small';n.textContent=T('cancel');
+  y.onclick=()=>{m.state='ok';apply(m.input);propEl(d,m);};
+  n.onclick=()=>{m.state='no';propEl(d,m);};
+  a.append(y,n);
+}
+function findProduct(name){ if(!name) return null; const q=name.toLowerCase(); return S.products.find(p=>p.code.toLowerCase()===q)||S.products.find(p=>p.name.toLowerCase().includes(q))||S.products.find(p=>q.split(/\s+/).filter(w=>w.length>3).some(w=>p.name.toLowerCase().includes(w.replace(/s$/,''))));}
+function apply(x){
+  if(x.tipo==='estado_pedido'){const o=S.orders.find(o=>o.n.toLowerCase()===(x.pedido||'').toLowerCase()); if(o&&x.estado){o.st=x.estado; if(o.av==='sinver'&&x.estado!=='pend')o.av='confloc'; afterState(o);} }
+  else if(x.tipo==='stock'){const p=findProduct(x.producto); if(p&&typeof x.nuevo_stock==='number'){const before=p.stock;p.stock=x.nuevo_stock;p.trust='al día';
+     log('stock',{es:`${p.name}: ${before} → ${p.stock} unidades`,en:`${p.name}: ${before} → ${p.stock} units`,pt:`${p.name}: ${before} → ${p.stock} unidades`},'you');
+     if(before===0&&p.stock>0&&p.wait){const w=p.wait.slice();p.wait=null;setTimeout(()=>{say('seguimiento',{es:'Avisé a la lista de espera',en:'Told the waitlist',pt:'Avisei a lista de espera'}[lang]);log('seguimiento',{es:`avisó a ${w.join(' y ')} que llegó ${p.name}`,en:`told ${w.join(' and ')} that ${p.name} arrived`,pt:`avisou ${w.join(' e ')} que chegou ${p.name}`},'auto');renderBoard();},900);}
+     renderBoard();}}
+  else if(x.tipo==='nuevo_pedido'){
+    const items=(x.items||[]).map(i=>{const p=findProduct(i.producto);return p?[p.code,i.cantidad||1]:null;}).filter(Boolean);
+    if(items.length){const o={n:'J-0'+(S.seq++),client:x.cliente||'Cliente',items,deliv:x.entrega==='envio'?'ship':'pickup',st:'pend',av:items.some(i=>P(i[0]).trust==='manual')?'sinver':'reserv',pay:'sinpagar',who:'',origin:'phone'};
+      S.orders.unshift(o); log('pedidos',{es:`registró ${o.n} (pedido telefónico de ${o.client})`,en:`logged ${o.n} (phone order from ${o.client})`,pt:`registrou ${o.n} (pedido por telefone de ${o.client})`},'you');
+      if(o.av==='reserv') items.forEach(i=>{P(i[0]).reserved+=i[1];});
+      renderBoard();}}
+  else if(x.tipo==='responder_cliente'){ log('atencion',{es:`respondió a ${x.cliente||'el cliente'}: “${x.mensaje||''}”`,en:`replied to ${x.cliente||'the customer'}: “${x.mensaje||''}”`,pt:`respondeu a ${x.cliente||'o cliente'}: “${x.mensaje||''}”`},'you'); }
+}
+
+let sampleP=null; function getSample(){ if(!sampleP) sampleP=(window.claude&&window.claude.use)?window.claude.use('sample').catch(()=>null):Promise.resolve(null); return sampleP; }
+let busy=false;
+async function ask(text){
+  if(busy||!text.trim()) return; busy=true;
+  chat.push({role:'me',text}); $('#chatIn').value=''; renderChat();
+  const m={role:'ai',bot:chatBot||'local',text:''}; chat.push(m); renderChat();
+  say(m.bot,'…',1500);
+  const sample=await getSample();
+  if(!sample){ fallback(text,m); busy=false; return; }
+  const data={productos:S.products.map(p=>({codigo:p.code,nombre:p.name,edad_min:p.age,precio:p.price,stock:p.stock,confianza:p.trust,reservadas:p.reserved,lista_espera:p.wait||[]})),
+    pedidos:S.orders.map(o=>({numero:o.n,cliente:o.client,lineas:o.items.map(i=>({producto:P(i[0]).name,cantidad:i[1]})),entrega:o.deliv,estado:o.st,disponibilidad:o.av,pago:o.pay,responsable:o.who,envoltorio:!!o.wrap,origen:o.origin})),
+    conversaciones:S.convs,pendientes:pendientes().map(p=>p.txt)};
+  const hist=chat.filter(c=>c.role==='me'||c.role==='ai').slice(-9,-2).map(c=>(c.role==='me'?'Personal: ':'Asistente: ')+c.text).join('\n');
+  const prompt=`Sos el equipo de seis asistentes de una juguetería de Rosario (Atención, Pedidos, Stock, Local, Seguimiento, Vendedores). Hablás con el personal del local desde el panel.
+Respondé en ${LANGNAME[lang]}, en hasta 3 frases cortas, simples y amables, sin markdown.
+Empezá SIEMPRE con el nombre del asistente que responde entre corchetes, en español: [Atención], [Pedidos], [Stock], [Local] o [Seguimiento].${chatBot?` El personal le está hablando a ${BOTS.find(b=>b.id===chatBot).name.es}; respondé como ese asistente salvo que sea claramente de otro.`:''}
+Usá solo los datos de abajo; no inventes productos, precios, stock ni teléfonos. Respetá la edad mínima del fabricante al recomendar.
+Si el personal pide cambiar algo (estado de un pedido, stock, cargar un pedido telefónico o enviar un mensaje a un cliente), llamá a la herramienta proponer_accion: el cambio se aplica solo si la persona toca Confirmar. Si faltan datos para hacerlo, preguntá solo lo que falta.
+Códigos de estado de pedido: pend=pendiente de confirmar, conf=confirmado, prep=en preparación, listo, entr=entregado, canc=cancelado.
+Datos actuales (JSON): ${JSON.stringify(data)}
+${hist?'Conversación previa:\n'+hist+'\n':''}Nuevo mensaje del personal: ${text}`;
+  const tools=[{name:'proponer_accion',description:'Propone un cambio que el personal debe confirmar con un botón. No aplica nada por sí solo.',
+    inputSchema:{type:'object',properties:{
+      tipo:{type:'string',enum:['estado_pedido','stock','nuevo_pedido','responder_cliente']},
+      resumen:{type:'string',description:'Una frase clara de lo que va a cambiar, en el idioma de la conversación'},
+      pedido:{type:'string',description:'Número, ej. J-0142'},estado:{type:'string',enum:['pend','conf','prep','listo','entr','canc']},
+      producto:{type:'string'},nuevo_stock:{type:'number',description:'Cantidad total resultante'},
+      cliente:{type:'string'},items:{type:'array',items:{type:'object',properties:{producto:{type:'string'},cantidad:{type:'number'}}}},
+      entrega:{type:'string',enum:['retiro','envio']},mensaje:{type:'string'}},required:['tipo','resumen']},
+    execute:(input)=>{ chat.push({role:'prop',resumen:input.resumen,input}); renderChat(); return {ok:true,nota:'Propuesta mostrada; espera confirmación del personal.'}; }}];
+  try{
+    const r=await sample(prompt,{modelTier:'quick',cache:false,tools,onText:({text})=>{m.text=text.replace(/^\s*\[[^\]]+\]\s*/,'');const mm=text.match(/^\s*\[([^\]]+)\]/);if(mm)m.bot=botFromName(mm[1]);if(m.el)updateAi(m.el,m);dBody.scrollTop=dBody.scrollHeight;}});
+    const full=r.text||''; const mm=full.match(/^\s*\[([^\]]+)\]/); if(mm) m.bot=botFromName(mm[1]);
+    m.text=full.replace(/^\s*\[[^\]]+\]\s*/,'')||m.text; if(m.el)updateAi(m.el,m);
+    say(m.bot,m.text.slice(0,90)+(m.text.length>90?'…':''),5000);
+  }catch(e){
+    if(e&&e.code==='not_granted'){sampleP=Promise.resolve(null);}
+    fallback(text,m);
+  }
+  busy=false;
+}
+function botFromName(n){n=n.toLowerCase();if(n.startsWith('vend')||n.startsWith('sell'))return'vendedores';if(n.startsWith('aten')||n.startsWith('care'))return'atencion';if(n.startsWith('ped')||n.startsWith('ord'))return'pedidos';if(n.startsWith('sto')||n.startsWith('est'))return'stock';if(n.startsWith('seg')||n.startsWith('fol')||n.startsWith('acom'))return'seguimiento';return'local';}
+function fallback(text,m){
+  const q=text.toLowerCase(); let out='';
+  const on=q.match(/j-?0?\d{3}/i);
+  if(/pendient|pending|pendên/.test(q)){const l=pendientes();m.bot='local';out=l.length? l.slice(0,4).map(p=>'• '+p.txt).join('\n') : T('empty');}
+  else if(on && /listo|ready|pronto/.test(q)){m.bot='pedidos';const n=on[0].toUpperCase().replace(/^J-?0?/,'J-0');chat.push({role:'prop',resumen:{es:`Marcar ${n} como Listo y avisar al cliente`,en:`Mark ${n} as Ready and notify the customer`,pt:`Marcar ${n} como Pronto e avisar o cliente`}[lang],input:{tipo:'estado_pedido',pedido:n,estado:'listo'}});out={es:'Te dejo el cambio para confirmar.',en:'Here is the change to confirm.',pt:'Deixo a mudança para confirmar.'}[lang];}
+  else { const p=findProduct(q.replace(/llegaron|arrived|chegaram|\d+/g,'')); const num=q.match(/\d+/);
+    if(p && num && /lleg|arriv|cheg/.test(q)){m.bot='stock';chat.push({role:'prop',resumen:`${p.name}: ${p.stock} → ${p.stock+(+num[0])}`,input:{tipo:'stock',producto:p.code,nuevo_stock:p.stock+(+num[0])}});out={es:'Preparé la actualización de stock.',en:'I prepared the stock update.',pt:'Preparei a atualização de estoque.'}[lang];}
+    else if(p){m.bot='stock';out=`${p.name}: ${p.stock} u. · ${money(p.price)} · ${p.age}+ · stock ${p.trust}`;}
+    else {m.bot='local';out=T('noAI');}
+  }
+  m.text=out; renderChat(); say(m.bot,out.split('\n')[0].slice(0,80));
+}
+$('#chatSend').onclick=()=>ask($('#chatIn').value);
+$('#chatIn').addEventListener('keydown',e=>{if(e.key==='Enter')ask($('#chatIn').value);});
+$('#mic').onclick=()=>{chat.push({role:'note',text:T('micNote')});renderChat();};
+
+
+/* ---------- tableros que se abren y se cierran ---------- */
+function toggleDash(c,force){
+  const a=$(c==='doll'?'#aDollScr':'#aHorseScr'), s=$(c==='doll'?'#aDollSay':'#aHorseSay');
+  const open = force!==undefined ? force : a.hidden;
+  a.hidden=!open; if(open) s.hidden=false;
+}
+$('#dollSay').onclick=()=>{$('#aDollSay').hidden=true;};
+$('#horseSay').onclick=()=>{$('#aHorseSay').hidden=true;};
+document.querySelectorAll('[data-close]').forEach(b=>b.onclick=e=>{e.stopPropagation();toggleDash(b.dataset.close,false);});
+
+/* ---------- vendedores conectados por su app ---------- */
+S.sellers=[{n:'Sofi',where:{es:'Mostrador',en:'Front desk',pt:'Balcão'}},{n:'Nico',where:{es:'Depósito',en:'Stockroom',pt:'Depósito'}},{n:'Caro',where:{es:'Mostrador',en:'Front desk',pt:'Balcão'}},{n:'Javi',where:{es:'Reparto',en:'Delivery',pt:'Entregas'}}];
+S.reqs=[{id:1,to:'Nico',what:'prep',ref:'J-0143',st:'avz'}]; S.rseq=2;
+const REQ={prep:{es:'Preparar un pedido',en:'Prepare an order',pt:'Preparar um pedido'},stock:{es:'Consultar stock',en:'Check stock',pt:'Consultar estoque'},client:{es:'Atender a un cliente',en:'Serve a customer',pt:'Atender um cliente'},other:{es:'Otra cosa',en:'Something else',pt:'Outra coisa'}};
+const RST={pend:{es:'Pendiente',en:'Pending',pt:'Pendente'},avz:{es:'Avanzando',en:'In progress',pt:'Avançando'},listo:{es:'Listo',en:'Done',pt:'Pronto'}};
+const mkBtn=(txt,cls,fn)=>{const b=document.createElement('button');b.className='btn small '+(cls||'');b.textContent=txt;b.onclick=fn;return b;};
+function renderSellers(){
+  dBody.innerHTML='<p class="muted">'+tr({es:'Cada vendedor tiene la app en su teléfono. Elegí a quién y qué necesitás: le llega al instante.',en:'Each seller has the app on their phone. Pick who and what you need: it arrives instantly.',pt:'Cada vendedor tem o app no celular. Escolha quem e o que precisa: chega na hora.'})+'</p>';
+  const f=document.createElement('div');f.className='item';
+  f.innerHTML='<label class="muted" for="sTo">'+tr({es:'Vendedor',en:'Seller',pt:'Vendedor'})+'</label><select class="field" id="sTo">'+S.sellers.map(s=>'<option>'+s.n+'</option>').join('')+'</select>'+
+   '<label class="muted" for="sWhat">'+tr({es:'Qué necesitás',en:'What you need',pt:'O que precisa'})+'</label><select class="field" id="sWhat">'+Object.keys(REQ).map(k=>'<option value="'+k+'">'+tr(REQ[k])+'</option>').join('')+'</select>'+
+   '<label class="muted" for="sRef">'+tr({es:'Pedido, producto o cliente',en:'Order, product or customer',pt:'Pedido, produto ou cliente'})+'</label><input class="field" id="sRef">';
+  const sb=mkBtn(tr({es:'Enviar',en:'Send',pt:'Enviar'}),'main',()=>{
+    const r={id:S.rseq++,to:$('#sTo').value,what:$('#sWhat').value,ref:$('#sRef').value.trim(),st:'pend'}; S.reqs.unshift(r); $('#sRef').value='';
+    say('vendedores',{es:`Le mandé a ${r.to}: ${REQ[r.what].es}`,en:`Sent to ${r.to}: ${REQ[r.what].en}`,pt:`Enviei a ${r.to}: ${REQ[r.what].pt}`});
+    log('vendedores',{es:`le pidió a ${r.to}: ${REQ[r.what].es}${r.ref?' ('+r.ref+')':''}`,en:`asked ${r.to}: ${REQ[r.what].en}${r.ref?' ('+r.ref+')':''}`,pt:`pediu a ${r.to}: ${REQ[r.what].pt}${r.ref?' ('+r.ref+')':''}`});
+    setTimeout(()=>{ if(r.st==='pend'&&Math.random()<.7){r.st='avz';log('vendedores',{es:`${r.to} aceptó desde la app y está avanzando`,en:`${r.to} accepted in the app and is on it`,pt:`${r.to} aceitou no app e está avançando`});renderBoard();} },4000);
+    renderBoard();
+  });
+  sb.style.alignSelf='flex-start'; f.appendChild(sb); dBody.appendChild(f);
+  const box=document.createElement('div');box.id='reqBox';box.style.cssText='display:flex;flex-direction:column;gap:12px';dBody.appendChild(box);
+  renderReqs();
+}
+function renderReqs(){
+  const box=document.getElementById('reqBox'); if(!box) return;
+  box.innerHTML='<div class="sec">'+tr({es:'Pedidos a vendedores',en:'Requests to sellers',pt:'Pedidos aos vendedores'})+'</div>';
+  S.reqs.forEach(r=>{const d=document.createElement('div');d.className='item';
+    d.innerHTML='<div class="row"><strong>'+r.to+'</strong><span class="pill '+({pend:'warn',avz:'',listo:'good'}[r.st])+'">'+tr(RST[r.st])+'</span></div><div>'+tr(REQ[r.what])+(r.ref?' · '+esc(r.ref):'')+'</div>';
+    if(r.st!=='listo'){const a=document.createElement('div');a.className='acts';a.appendChild(mkBtn(r.st==='pend'?tr({es:'Avanzar',en:'Advance',pt:'Avançar'}):tr({es:'Marcar listo',en:'Mark done',pt:'Marcar pronto'}),'main',()=>{r.st=r.st==='pend'?'avz':'listo';log('vendedores',{es:`${r.to}: ${RST[r.st].es.toLowerCase()} · ${REQ[r.what].es}`,en:`${r.to}: ${RST[r.st].en.toLowerCase()} · ${REQ[r.what].en}`,pt:`${r.to}: ${RST[r.st].pt.toLowerCase()} · ${REQ[r.what].pt}`});renderBoard();}));d.appendChild(a);}
+    box.appendChild(d);});
+  box.insertAdjacentHTML('beforeend','<div class="sec">'+tr({es:'Equipo',en:'Team',pt:'Equipe'})+'</div>'+S.sellers.map(s=>'<div class="item"><div class="row"><strong>'+s.n+'</strong><span class="pill good">'+tr({es:'App conectada',en:'App connected',pt:'App conectado'})+'</span></div><div class="muted">'+tr(s.where)+' · '+S.reqs.filter(r=>r.to===s.n&&r.st!=='listo').length+' '+tr({es:'tareas abiertas',en:'open tasks',pt:'tarefas abertas'})+'</div></div>').join(''));
+}
+
+/* ---------- pantallita en vivo: stock con foto + lo que se puede crear ---------- */
+let photos=store.get('photos',{}); const thumbs={};
+const KIND={'KC-08':['science'],'MI-06':['microscope'],'PU-00':['plush',0xffb3d1,true],'RC-10':['puzzle'],'BL-04':['blocks'],'MA-03':['doll',0x7f6cff],'CM-02':['horse'],'PA-05':['track'],'JT-03':['tea']};
+const MATS={}; const mat3=c=>MATS[c]||(MATS[c]=M(c));
+function buildModel(kind,col,horn){
+  const g=new THREE.Group(); const dk=0x1d1a2e;
+  const P_=(geo,c,x,y,z,rx,ry,rz,sx,sy,sz)=>addTo(g,geo,mat3(c),x,y,z,rx,ry,rz,sx,sy,sz);
+  if(kind==='plush'){const c=col||0xb07a4a; P_(new THREE.SphereGeometry(.8,32,24),c,0,.85,0,0,0,0,1,1.05,.9); P_(new THREE.SphereGeometry(.6,32,24),c,0,1.95,.05);
+    [-1,1].forEach(s=>P_(new THREE.SphereGeometry(.22,20,16),c,s*.42,2.42,0));[-1,1].forEach(s=>P_(new THREE.SphereGeometry(.26,20,16),c,s*.72,1.0,.25,0,0,0,1,1.3,1));[-1,1].forEach(s=>P_(new THREE.SphereGeometry(.3,20,16),c,s*.42,.22,.35));
+    P_(new THREE.SphereGeometry(.24,20,16),0xf3e2cc,0,1.82,.5,0,0,0,1,.8,.8); P_(new THREE.SphereGeometry(.08,12,10),dk,0,1.9,.7); [-1,1].forEach(s=>P_(new THREE.SphereGeometry(.07,12,10),dk,s*.22,2.08,.52));
+    if(horn) P_(new THREE.ConeGeometry(.12,.55,16),0xffd35c,0,2.62,.2,-.3);}
+  else if(kind==='car'||kind==='track'){const c=col||0xea4747;
+    if(kind==='track'){P_(new THREE.TorusGeometry(1.7,.28,12,64),0x3a3f55,0,.06,0,Math.PI/2,0,0,1,1.35,.25);P_(new THREE.TorusGeometry(1.7,.03,6,64),0xffffff,0,.12,0,Math.PI/2,0,0,1,1.35,1);}
+    const k=kind==='track'?.45:1, ox=kind==='track'?1.7:0;
+    P_(new THREE.BoxGeometry(1.8*k,.45*k,.95*k),c,ox,.45*k,0); P_(new THREE.BoxGeometry(1.0*k,.42*k,.85*k),c,ox-.1*k,.88*k,0); P_(new THREE.BoxGeometry(1.02*k,.3*k,.87*k),0x9fd2ff,ox-.1*k,.88*k,0);
+    [[.6,.5],[.6,-.5],[-.6,.5],[-.6,-.5]].forEach(([x,z])=>P_(new THREE.CylinderGeometry(.24*k,.24*k,.18*k,20),dk,ox+x*k,.25*k,z*k,Math.PI/2));}
+  else if(kind==='doll'){const c=col||0x7f6cff; P_(new THREE.ConeGeometry(.75,1.4,32),c,0,.95,0); P_(new THREE.SphereGeometry(.45,28,20),0x6e3524,0,2.05,-.1); P_(new THREE.SphereGeometry(.42,28,20),0xffd9c4,0,1.98,.04);
+    [-1,1].forEach(s=>P_(new THREE.CylinderGeometry(.07,.07,.7,10),0xffd9c4,s*.45,1.3,0,0,0,s*.5)); [-1,1].forEach(s=>P_(new THREE.CylinderGeometry(.08,.08,.35,10),0xffd9c4,s*.2,.12,0)); [-1,1].forEach(s=>P_(new THREE.SphereGeometry(.05,10,8),dk,s*.14,2.02,.42));}
+  else if(kind==='blocks'){const cs=col?[col,col,col,col,col,col]:[0xea4747,0x3b78ec,0xf2b21e,0x1a9e52,0x9460ee,0xf3843a];[[0,0],[1.05,0],[-1.05,0],[.5,.62],[-.55,.62],[0,1.24]].forEach(([x,y],i)=>{P_(new THREE.BoxGeometry(1,.6,.8),cs[i],x,y+.3,0);P_(new THREE.CylinderGeometry(.13,.13,.12,16),cs[i],x-.25,y+.66,0);P_(new THREE.CylinderGeometry(.13,.13,.12,16),cs[i],x+.25,y+.66,0);});}
+  else if(kind==='horse'){const w=0xd6873f; P_(new THREE.TorusGeometry(2.2,.08,10,40,1.1),0x8c4f1e,0,2.3,0,0,0,-Math.PI/2-.55); [[-.6,.35],[-.6,-.35],[.6,.35],[.6,-.35]].forEach(([x,z])=>P_(new THREE.CylinderGeometry(.08,.08,.8,10),w,x,.5,z));
+    P_(new THREE.SphereGeometry(1,32,24),w,0,1.1,0,0,0,0,1.05,.48,.45); P_(new THREE.CylinderGeometry(.2,.26,.8,14),w,.85,1.55,0,0,0,-.6); P_(new THREE.SphereGeometry(1,24,18),w,1.25,1.95,0,0,0,-.35,.45,.27,.25); P_(new THREE.ConeGeometry(.16,.6,12),0xe8483f,-1.1,1.2,0,0,0,1.15);}
+  else if(kind==='microscope'){P_(new THREE.BoxGeometry(1.4,.25,1),0x2f3550,0,.13,0); P_(new THREE.BoxGeometry(.25,1.6,.3),0xffffff,-.35,1.05,0,0,0,.15); P_(new THREE.CylinderGeometry(.5,.5,.06,24),0x2f3550,.15,.95,0); P_(new THREE.CylinderGeometry(.16,.2,1.1,20),0xffffff,.1,1.75,0,0,0,-.35); P_(new THREE.CylinderGeometry(.12,.12,.3,16),0x2f3550,-.12,2.35,0,0,0,-.35); P_(new THREE.CylinderGeometry(.14,.14,.12,16),0x1a9e52,-.35,1.1,.2,Math.PI/2);}
+  else if(kind==='science'){P_(new THREE.BoxGeometry(2,.25,.8),0xf2b21e,0,.13,0); P_(new THREE.SphereGeometry(.55,24,18),0x9fe3d0,-.4,.8,0); P_(new THREE.CylinderGeometry(.15,.15,.6,16),0x9fe3d0,-.4,1.5,0); [[.35,0xea4747],[.65,0x3b78ec],[.95,0x9460ee]].forEach(([x,c])=>P_(new THREE.CylinderGeometry(.11,.11,.9,14),c,x,.7,0));}
+  else if(kind==='puzzle'){const cs=[0x3b78ec,0xf2b21e,0xea4747,0x1a9e52,0x9460ee,0xf3843a,0x159c9c,0xff6f9f,0x2f3550];for(let i=0;i<9;i++)P_(new THREE.BoxGeometry(.7,.12,.7),cs[i],(i%3-1)*.74,.06,(Math.floor(i/3)-1)*.74);}
+  else if(kind==='tea'){P_(new THREE.SphereGeometry(.6,28,20),0xffffff,0,.6,0,0,0,0,1,.85,1); P_(new THREE.CylinderGeometry(.25,.3,.15,20),0xffffff,0,1.1,0); P_(new THREE.CylinderGeometry(.06,.1,.6,10),0xffffff,.65,.7,0,0,0,-.9);
+    [-1,1].forEach(s=>{P_(new THREE.CylinderGeometry(.42,.42,.04,24),0xff6f9f,s*1.25,.02,.6);P_(new THREE.CylinderGeometry(.24,.18,.3,20),0xffffff,s*1.25,.2,.6);});}
+  return g;
+}
+/* precios desde la base de datos de materiales */
+S.materials={
+ tela:{n:{es:'Tela de peluche',en:'Plush fabric',pt:'Tecido de pelúcia'},u:'m²',p:5200},
+ relleno:{n:{es:'Relleno siliconado',en:'Stuffing',pt:'Enchimento'},u:'kg',p:3800},
+ ojos:{n:{es:'Ojos de seguridad',en:'Safety eyes',pt:'Olhos de segurança'},u:'par',p:900},
+ abs:{n:{es:'Plástico ABS',en:'ABS plastic',pt:'Plástico ABS'},u:'kg',p:7400},
+ ruedas:{n:{es:'Juego de ruedas',en:'Wheel set',pt:'Jogo de rodas'},u:'u.',p:1800},
+ pintura:{n:{es:'Pintura no tóxica',en:'Non-toxic paint',pt:'Tinta atóxica'},u:'u.',p:1200},
+ vinilo:{n:{es:'Vinilo',en:'Vinyl',pt:'Vinil'},u:'kg',p:6900},
+ ropa:{n:{es:'Vestido de tela',en:'Fabric dress',pt:'Vestido de tecido'},u:'u.',p:2600},
+ pelo:{n:{es:'Pelo sintético',en:'Synthetic hair',pt:'Cabelo sintético'},u:'u.',p:1500},
+ caja:{n:{es:'Caja',en:'Box',pt:'Caixa'},u:'u.',p:1100},
+ mano:{n:{es:'Mano de obra',en:'Labor',pt:'Mão de obra'},u:'h',p:4500}
+};
+S.margin=.35;
+const RECIPE={plush:[['tela',.6],['relleno',.35],['ojos',1,1],['caja',1,1],['mano',1.2]],car:[['abs',.25],['ruedas',1,1],['pintura',1,1],['caja',1,1],['mano',.8]],doll:[['vinilo',.3],['ropa',1,1],['pelo',1,1],['ojos',1,1],['caja',1,1],['mano',1.5]],blocks:[['abs',.9],['pintura',1,1],['caja',1,1],['mano',.6]]};
+const MAKE={types:[{id:'plush',n:{es:'Osito',en:'Teddy',pt:'Ursinho'}},{id:'car',n:{es:'Auto',en:'Car',pt:'Carrinho'}},{id:'doll',n:{es:'Muñeca',en:'Doll',pt:'Boneca'}},{id:'blocks',n:{es:'Bloques',en:'Blocks',pt:'Blocos'}}],
+  colors:[[0xea4747,{es:'rojo',en:'red',pt:'vermelho'}],[0x3b78ec,{es:'azul',en:'blue',pt:'azul'}],[0xf2b21e,{es:'amarillo',en:'yellow',pt:'amarelo'}],[0x1a9e52,{es:'verde',en:'green',pt:'verde'}],[0x9460ee,{es:'violeta',en:'purple',pt:'roxo'}],[0xff6f9f,{es:'rosa',en:'pink',pt:'rosa'}],[0xb07a4a,{es:'marrón',en:'brown',pt:'marrom'}]],
+  sizes:[{id:'S',n:{es:'Chico',en:'Small',pt:'Pequeno'},m:.7,h:.9},{id:'M',n:{es:'Mediano',en:'Medium',pt:'Médio'},m:1,h:1},{id:'L',n:{es:'Grande',en:'Large',pt:'Grande'},m:1.5,h:1.25}]};
+let mk={type:'plush',color:0x3b78ec,size:'M'}, tvTab='stock', tvIdx=0, tvTimer=null, tvReq=null, waPhone='', showCalc=false;
+function mkCalc(){
+  const sz=MAKE.sizes.find(s=>s.id===mk.size); let cost=0;
+  const lines=RECIPE[mk.type].map(([k,q,fixed])=>{const m=S.materials[k];const qty=fixed?q:+(q*(k==='mano'?sz.h:sz.m)).toFixed(2);const sub=qty*m.p;cost+=sub;return {n:tr(m.n),qty,u:m.u,unit:m.p,sub};});
+  return {lines,cost,price:Math.round(cost*(1+S.margin)/100)*100};
+}
+const mkPrice=()=>mkCalc().price;
+let TVG=null;
+try{ if(window.THREE) TVG=(function(){
+  const cv=$('#tvgl'); const r=new THREE.WebGLRenderer({canvas:cv,antialias:true,alpha:true,preserveDrawingBuffer:true});
+  const sc=new THREE.Scene(), cam=new THREE.PerspectiveCamera(35,1,.1,100);
+  sc.add(new THREE.HemisphereLight(0xffffff,0x8a93b8,.95)); const l=new THREE.DirectionalLight(0xffffff,.7); l.position.set(4,8,6); sc.add(l);
+  const holder=new THREE.Group(); sc.add(holder); let cur=null, rot=0;
+  const frame=g=>{const s=new THREE.Box3().setFromObject(g).getSize(new THREE.Vector3());const h=Math.max(s.x,s.y,s.z);cam.position.set(0,h*.9+.6,h*2+1.6);cam.lookAt(0,s.y*.45,0);};
+  const set=(kind,col,horn)=>{if(cur)holder.remove(cur);cur=buildModel(kind,col,horn);holder.add(cur);frame(cur);};
+  r.setPixelRatio(1); r.setSize(240,240,false); cam.aspect=1; cam.updateProjectionMatrix();
+  S.products.forEach(p=>{const k=KIND[p.code]||['blocks'];set(k[0],k[1],k[2]);holder.rotation.y=-.5;r.render(sc,cam);thumbs[p.code]=cv.toDataURL('image/png');});
+  r.setPixelRatio(Math.min(devicePixelRatio||1,2));
+  const fit=()=>{const w=cv.clientWidth,h=cv.clientHeight;if(!w||!h)return;r.setSize(w,h,false);cam.aspect=w/h;cam.updateProjectionMatrix();if(cur)frame(cur);};
+  addEventListener('resize',fit);
+  (function loop(){ if(tvTab==='make'){ if(!reduce) rot+=.01; holder.rotation.y=rot; r.render(sc,cam);} requestAnimationFrame(loop); })();
+  return {set,fit};
+})(); }catch(e){ TVG=null; }
+const imgOf=p=>photos[p.code]||thumbs[p.code]||'';
+const stockList=()=>S.products.filter(p=>p.stock>0);
+function waLink(msg){ const d=waPhone.replace(/\D/g,''); return 'https://wa.me/'+(d?d:'')+'?text='+encodeURIComponent(msg); }
+function waBlock(msg,onSend){
+  const wrap=document.createElement('div'); wrap.className='wa-row';
+  wrap.innerHTML='<label class="sr-only" for="waTel">WhatsApp</label><input id="waTel" class="wa-tel" type="tel" inputmode="tel" placeholder="'+tr({es:'WhatsApp del cliente (ej. 5493415551234)',en:'Customer WhatsApp (e.g. 5493415551234)',pt:'WhatsApp do cliente (ex. 5493415551234)'})+'" value="'+esc(waPhone)+'">'+
+   '<a class="btn wa" target="_blank" rel="noopener" href="'+waLink(msg)+'"><svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2a10 10 0 0 0-8.6 15.1L2 22l5-1.3A10 10 0 1 0 12 2Zm5.3 14.1c-.2.6-1.3 1.2-1.8 1.2-.5.1-1 .2-3.4-.7-2.8-1.1-4.6-4-4.7-4.2-.1-.2-1.1-1.5-1.1-2.9s.7-2 1-2.3c.2-.3.5-.3.7-.3h.5c.2 0 .4 0 .6.5l.8 2c.1.2.1.4 0 .5l-.4.6-.4.4c-.1.2-.3.3-.1.6.2.3.8 1.3 1.7 2.1 1.2 1 2.1 1.3 2.4 1.5.3.1.5.1.6-.1l.9-1c.2-.3.4-.2.7-.1l1.9.9c.3.1.5.2.5.3.1.2.1.7-.1 1.4Z"/></svg><span>'+tr({es:'Enviar por WhatsApp',en:'Send via WhatsApp',pt:'Enviar pelo WhatsApp'})+'</span></a>'+
+   '<button class="btn" type="button">'+tr({es:'Copiar mensaje',en:'Copy message',pt:'Copiar mensagem'})+'</button>';
+  const inp=wrap.querySelector('input'), a=wrap.querySelector('a'), cp=wrap.querySelector('button');
+  inp.oninput=()=>{waPhone=inp.value; a.href=waLink(msg);};
+  a.onclick=()=>{a.href=waLink(msg); onSend();};
+  cp.onclick=()=>{const done=()=>{cp.textContent=tr({es:'Copiado',en:'Copied',pt:'Copiado'});};
+    if(navigator.clipboard&&navigator.clipboard.writeText) navigator.clipboard.writeText(msg).then(done,()=>{const rg=document.createRange();rg.selectNodeContents(pv);const sl=getSelection();sl.removeAllRanges();sl.addRange(rg);cp.textContent=tr({es:'Texto seleccionado',en:'Text selected',pt:'Texto selecionado'});});
+    else done();};
+  const pv=document.createElement('p'); pv.className='wa-prev'; pv.textContent=msg;
+  const box=document.createElement('div'); box.className='wa-box'; box.append(wrap,pv); return box;
+}
+function renderTV(){
+  clearTimeout(tvTimer);
+  $('#tvTabStock').setAttribute('aria-selected',String(tvTab==='stock')); $('#tvTabMake').setAttribute('aria-selected',String(tvTab==='make'));
+  const img=$('#tvImg'), cv=$('#tvgl'), info=$('#tvInfo'), acts=$('#tvActs'); acts.innerHTML='';
+  if(tvTab==='stock'){
+    const l=stockList(); tvIdx=((tvIdx%l.length)+l.length)%l.length; const p=l[tvIdx];
+    cv.hidden=true; img.hidden=!imgOf(p); img.src=imgOf(p); img.alt=p.name;
+    info.innerHTML='<span class="m">'+esc(tr(TYPEN[p.code]||{es:''}))+' · '+p.age+'+</span><span class="t">'+esc(p.name)+'</span><span class="p">'+money(p.price)+'</span><span class="q">'+p.stock+' '+tr({es:'en stock hoy',en:'in stock today',pt:'em estoque hoje'})+'</span><span class="m">'+(tvIdx+1)+' / '+l.length+'</span>';
+    $('#tvReq').textContent = tvReq? tr({es:`${tvReq} quiere verlo antes de comprar.`,en:`${tvReq} wants to see it before buying.`,pt:`${tvReq} quer ver antes de comprar.`}) : '';
+    const nav=document.createElement('div'); nav.className='tv-nav';
+    nav.append(mkBtn('‹','',()=>{tvIdx--;renderTV();}), mkBtn('›','',()=>{tvIdx++;renderTV();}),
+      mkBtn(tr(photos[p.code]?{es:'Cambiar foto',en:'Change photo',pt:'Trocar foto'}:{es:'Cargar foto',en:'Upload photo',pt:'Enviar foto'}),'',()=>{$('#tvFile').dataset.code=p.code;$('#tvFile').value='';$('#tvFile').click();}));
+    acts.appendChild(nav);
+    const msg=tr({es:`¡Hola${tvReq?' '+tvReq:''}! Te comparto el ${p.name}: ${money(p.price)}. Hoy tenemos ${p.stock} en stock. Recomendado desde ${p.age} años. ¿Te lo reservamos?`,en:`Hi${tvReq?' '+tvReq:''}! Here is the ${p.name}: ${money(p.price)}. We have ${p.stock} in stock today. Recommended from age ${p.age}. Shall we reserve it?`,pt:`Oi${tvReq?' '+tvReq:''}! Te mostro o ${p.name}: ${money(p.price)}. Hoje temos ${p.stock} em estoque. Recomendado a partir de ${p.age} anos. Reservamos para você?`});
+    acts.appendChild(waBlock(msg,()=>{log('atencion',{es:`le mandó ${p.name} a ${tvReq||'un cliente'} por WhatsApp`,en:`sent ${p.name} to ${tvReq||'a customer'} on WhatsApp`,pt:`enviou ${p.name} a ${tvReq||'um cliente'} pelo WhatsApp`});say('atencion',{es:'Abrí WhatsApp con el mensaje',en:'Opened WhatsApp with the message',pt:'Abri o WhatsApp com a mensagem'});tvReq=null;}));
+    if(!reduce&&!tvReq&&!document.activeElement.closest('.tv')) tvTimer=setTimeout(()=>{tvIdx++;renderTV();},5000);
+  } else {
+    img.hidden=true; cv.hidden=!TVG; $('#tvReq').textContent='';
+    if(TVG){TVG.fit(); TVG.set(mk.type,mk.color);}
+    const c=mkCalc(), t=MAKE.types.find(x=>x.id===mk.type), sz=MAKE.sizes.find(x=>x.id===mk.size), col=MAKE.colors.find(x=>x[0]===mk.color);
+    info.innerHTML='<span class="m">'+tr({es:'Juguete a medida',en:'Custom toy',pt:'Brinquedo sob medida'})+'</span>'+
+      '<div class="mkrow">'+MAKE.types.map(x=>'<button data-t="'+x.id+'" aria-pressed="'+(mk.type===x.id)+'">'+tr(x.n)+'</button>').join('')+'</div>'+
+      '<div class="mkrow">'+MAKE.colors.map(([h,n])=>'<button class="sw" data-c="'+h+'" aria-pressed="'+(mk.color===h)+'" aria-label="'+tr(n)+'" style="background:#'+h.toString(16).padStart(6,'0')+'"></button>').join('')+'</div>'+
+      '<div class="mkrow">'+MAKE.sizes.map(x=>'<button data-s="'+x.id+'" aria-pressed="'+(mk.size===x.id)+'">'+tr(x.n)+'</button>').join('')+'</div>'+
+      '<span class="m">'+tr({es:'Precio calculado con la base de materiales',en:'Price from the materials database',pt:'Preço calculado pela base de materiais'})+'</span><span class="p">'+money(c.price)+'</span>'+
+      '<button class="calc-t" aria-expanded="'+showCalc+'">'+tr(showCalc?{es:'Ocultar cálculo',en:'Hide breakdown',pt:'Ocultar cálculo'}:{es:'Ver cálculo',en:'See breakdown',pt:'Ver cálculo'})+'</button>'+
+      (showCalc?'<div class="calc">'+c.lines.map(l=>'<div><span>'+esc(l.n)+' · '+l.qty+' '+l.u+' × '+money(l.unit)+'</span><b>'+money(l.sub)+'</b></div>').join('')+'<div><span>'+tr({es:'Costo',en:'Cost',pt:'Custo'})+'</span><b>'+money(c.cost)+'</b></div><div><span>'+tr({es:'Margen del local',en:'Store margin',pt:'Margem da loja'})+' '+Math.round(S.margin*100)+'%</span><b>'+money(c.price-c.cost)+'</b></div></div>':'');
+    info.querySelectorAll('[data-t]').forEach(b=>b.onclick=()=>{mk.type=b.dataset.t;renderTV();});
+    info.querySelectorAll('[data-c]').forEach(b=>b.onclick=()=>{mk.color=+b.dataset.c;renderTV();});
+    info.querySelectorAll('[data-s]').forEach(b=>b.onclick=()=>{mk.size=b.dataset.s;renderTV();});
+    info.querySelector('.calc-t').onclick=()=>{showCalc=!showCalc;renderTV();};
+    const msg=tr({es:`¡Hola! Así quedaría tu ${t.n.es.toLowerCase()} a medida, color ${col[1].es}, tamaño ${sz.n.es.toLowerCase()}: ${money(c.price)}. ¿Lo encargamos?`,en:`Hi! This is how your custom ${t.n.en.toLowerCase()} would look, ${col[1].en}, ${sz.n.en.toLowerCase()} size: ${money(c.price)}. Shall we order it?`,pt:`Oi! Assim ficaria seu ${t.n.pt.toLowerCase()} sob medida, cor ${col[1].pt}, tamanho ${sz.n.pt.toLowerCase()}: ${money(c.price)}. Encomendamos?`});
+    acts.appendChild(waBlock(msg,()=>{log('atencion',{es:`mandó por WhatsApp un ${t.n.es.toLowerCase()} a medida (${money(c.price)})`,en:`sent a custom ${t.n.en.toLowerCase()} on WhatsApp (${money(c.price)})`,pt:`enviou um ${t.n.pt.toLowerCase()} sob medida pelo WhatsApp (${money(c.price)})`});say('atencion',{es:'Abrí WhatsApp con el mensaje',en:'Opened WhatsApp with the message',pt:'Abri o WhatsApp com a mensagem'});}));
+  }
+}
+const TYPEN={'KC-08':{es:'Ciencia',en:'Science',pt:'Ciência'},'MI-06':{es:'Ciencia',en:'Science',pt:'Ciência'},'PU-00':{es:'Peluches',en:'Plush',pt:'Pelúcias'},'RC-10':{es:'Juegos de mesa',en:'Board games',pt:'Jogos de mesa'},'BL-04':{es:'Construcción',en:'Building',pt:'Construção'},'MA-03':{es:'Muñecas',en:'Dolls',pt:'Bonecas'},'CM-02':{es:'Madera',en:'Wooden',pt:'Madeira'},'PA-05':{es:'Vehículos',en:'Vehicles',pt:'Veículos'},'JT-03':{es:'Juego simbólico',en:'Pretend play',pt:'Faz de conta'}};
+$('#tvTabStock').onclick=()=>{tvTab='stock';renderTV();};
+$('#tvTabMake').onclick=()=>{tvTab='make';renderTV();};
+$('#tvFile').addEventListener('change',e=>{
+  const f=e.target.files[0], code=e.target.dataset.code; if(!f||!code) return;
+  const im=new Image(), url=URL.createObjectURL(f);
+  im.onload=()=>{const s=Math.min(1,520/Math.max(im.width,im.height));const c=document.createElement('canvas');c.width=Math.round(im.width*s);c.height=Math.round(im.height*s);c.getContext('2d').drawImage(im,0,0,c.width,c.height);
+    photos[code]=c.toDataURL('image/jpeg',.82); store.set('photos',photos); URL.revokeObjectURL(url);
+    log('local',{es:`guardó una foto de ${P(code).name}`,en:`saved a photo of ${P(code).name}`,pt:`salvou uma foto de ${P(code).name}`}); renderTV(); };
+  im.src=url;
+});
+function showOnTVQuiet(p,client){ tvTab='stock'; const l=stockList(); tvIdx=Math.max(0,l.indexOf(p)); tvReq=client; renderTV(); }
+
+/* ---------- recorrido guiado: muestra dónde está cada cosa ---------- */
+const TOUR=[
+ {el:()=>$('#stage'),t:{es:'Esta es la base de datos: la muñequita guarda a los clientes y el caballito, los pedidos y el stock.',en:'This is the database: the doll keeps customers and the horse keeps orders and stock.',pt:'Este é o banco de dados: a bonequinha guarda os clientes e o cavalinho, os pedidos e o estoque.'}},
+ {pre:()=>{toggleDash('doll',true);if(G)G.gesture('char','doll');},el:()=>$('#aDollScr .scr'),t:{es:'Tocá la muñequita y aparece su tablero. Tocá el tablero para ver el detalle; la × lo cierra.',en:'Tap the doll and its dashboard appears. Tap it for details; the × closes it.',pt:'Toque na bonequinha e aparece o painel. Toque nele para ver o detalhe; o × fecha.'}},
+ {pre:()=>{toggleDash('horse',true);if(G)G.gesture('char','horse');},el:()=>$('#aHorseScr .scr'),t:{es:'Lo mismo con el caballito: pedidos, para retirar, reservas y stock bajo.',en:'Same with the horse: orders, pickups, reservations and low stock.',pt:'O mesmo com o cavalinho: pedidos, retiradas, reservas e estoque baixo.'}},
+ {pre:()=>{BOTS.forEach((b,i)=>setTimeout(()=>G&&G.gesture('bot',b.id,'flip'),i*150));},el:()=>$('#stage'),t:{es:'Los seis asistentes giran siempre alrededor. Tocá uno para hablarle o arrastralo: después vuelve solo.',en:'The six assistants always orbit. Tap one to talk or drag it: it comes back on its own.',pt:'Os seis assistentes giram sempre ao redor. Toque num para falar ou arraste: ele volta sozinho.'}},
+ {pre:()=>say('vendedores',{es:'¡Acá estoy! Conecto con los vendedores',en:'Here I am! I connect with sellers',pt:'Estou aqui! Conecto com os vendedores'}),el:()=>$('#stage'),t:{es:'Vendedores conecta con la app de cada vendedor: elegís a quién y qué necesitás, y lo avanzan desde su teléfono.',en:'Sellers connects to each seller’s app: pick who and what you need, and they move it forward from their phone.',pt:'Vendedores conecta com o app de cada vendedor: escolha quem e o que precisa, e eles avançam pelo celular.'}},
+ {el:()=>$('#bTalk'),t:{es:'Hablar: escribís lo que necesitás y la IA lo hace o te lo deja para confirmar.',en:'Talk: type what you need and the AI does it or leaves it for you to confirm.',pt:'Falar: escreva o que precisa e a IA faz ou deixa para você confirmar.'}},
+ {el:()=>$('#bPend'),t:{es:'Pendientes: lo que falta resolver y de qué parte es.',en:'To-dos: what is left and which part it belongs to.',pt:'Pendências: o que falta resolver e de que parte é.'}},
+ {el:()=>$('#rush'),t:{es:'Urgentes primero: ordena los pendientes por lo que tiene horario o espera hace más tiempo.',en:'Urgent first: sorts to-dos by what has a set time or has waited longest.',pt:'Urgentes primeiro: ordena as pendências pelo que tem horário ou espera há mais tempo.'}},
+ {el:()=>$('.tv'),t:{es:'Pantallita en vivo: lo que hay hoy en stock con foto, precio y cantidad, y lo que se puede crear a medida.',en:'Live screen: what is in stock today with photo, price and quantity, and what can be custom-made.',pt:'Telinha ao vivo: o que há hoje em estoque com foto, preço e quantidade, e o que dá para criar sob medida.'}},
+ {el:()=>$('.feed'),t:{es:'Acá ves todo lo que hicieron los asistentes, al momento.',en:'Here you see everything the assistants did, as it happens.',pt:'Aqui você vê tudo o que os assistentes fizeram, na hora.'}}
+];
+let tourI=-1, tourT=null, tourRaf=null;
+function tourStep(i){
+  clearTimeout(tourT); tourI=i; if(i<0||i>=TOUR.length) return endTour();
+  const s=TOUR[i]; if(s.pre) s.pre();
+  const el=s.el(); if(el) el.scrollIntoView({behavior:reduce?'auto':'smooth',block:'center'});
+  $('#tourTxt').textContent=tr(s.t); $('#tourN').textContent=(i+1)+' / '+TOUR.length;
+  $('#tourNext').textContent=i===TOUR.length-1?tr({es:'Terminar',en:'Finish',pt:'Terminar'}):tr({es:'Siguiente',en:'Next',pt:'Próximo'});
+  tourT=setTimeout(()=>tourStep(i+1),6500);
+}
+function placeTour(){
+  if(tourI<0) return; const el=TOUR[tourI].el(); const hole=$('#tourHole'), card=$('#tourCard');
+  if(el){const r=el.getBoundingClientRect(), pad=8; hole.style.cssText='left:'+(r.left-pad)+'px;top:'+(r.top-pad)+'px;width:'+(r.width+pad*2)+'px;height:'+(r.height+pad*2)+'px';
+    const cw=Math.min(340,innerWidth-24); let top=r.bottom+16; if(top+150>innerHeight) top=Math.max(12,r.top-166); if(r.height>innerHeight*.6) top=innerHeight-176;
+    card.style.left=Math.max(12,Math.min(innerWidth-cw-12,r.left+r.width/2-cw/2))+'px'; card.style.top=top+'px'; card.style.width=cw+'px';}
+  tourRaf=requestAnimationFrame(placeTour);
+}
+function startTour(){ closeDrawer(); $('#tour').hidden=false; tourStep(0); cancelAnimationFrame(tourRaf); placeTour(); }
+function endTour(){ clearTimeout(tourT); tourI=-1; cancelAnimationFrame(tourRaf); $('#tour').hidden=true; }
+$('#bTour').onclick=startTour;
+$('#tourNext').onclick=()=>tourStep(tourI+1);
+$('#tourPrev').onclick=()=>tourStep(Math.max(0,tourI-1));
+$('#tourEnd').onclick=endTour;
+addEventListener('keydown',e=>{if(e.key==='Escape'&&tourI>=0)endTour();});
+
+/* ---------- WhatsApp simulado: los asistentes trabajan solos ---------- */
+const EVENTS=[
+ ()=>{S.convs.unshift({who:'Marta',st:'bot',last:'¿Tienen algo para una nena de 6 que le guste la ciencia? Hasta 30 mil',mins:0});S.recs++;
+   say('atencion',{es:'Le recomendé el microscopio a Marta',en:'Suggested the microscope to Marta',pt:'Recomendei o microscópio à Marta'}[lang]);
+   log('atencion',{es:'recomendó a Marta el Microscopio de juguete (6+, $26.900). No ofreció el Kit de ciencia porque es para 8+.',en:'suggested the Toy microscope to Marta (6+, $26,900). Skipped the Science kit because it is 8+.',pt:'recomendou à Marta o Microscópio de brinquedo (6+, $26.900). Não ofereceu o Kit de ciência porque é 8+.'},'auto');},
+ ()=>{const c=S.convs.find(c=>c.who==='Marta');if(c)c.last='¿Me mostrás cómo es en la caja?';
+   showOnTVQuiet(P('MI-06'),'Marta');
+   say('atencion',{es:'Marta quiere verlo: lo dejé en la pantallita',en:'Marta wants to see it: it is on the screen',pt:'Marta quer ver: deixei na telinha'}[lang]);
+   log('atencion',{es:'pidió al equipo una foto o video del microscopio para Marta',en:'asked the team for a photo or video of the microscope for Marta',pt:'pediu à equipe uma foto ou vídeo do microscópio para a Marta'},'auto');},
+ ()=>{S.convs.unshift({who:'Carlos',st:'resuelta',last:'Hola, soy Carlos. Necesito 2 pistas de autos para el sábado, las retiro yo',mins:0});
+   const o={n:'J-0'+(S.seq++),client:'Carlos Medina',items:[['PA-05',2]],deliv:'pickup',st:'conf',av:'reserv',pay:'sinpagar',who:'Nico',origin:'wa',note:'sábado'};S.orders.unshift(o);P('PA-05').reserved+=2;
+   say('pedidos',{es:`Entendí a Carlos: armé ${o.n}`,en:`Understood Carlos: created ${o.n}`,pt:`Entendi o Carlos: criei ${o.n}`}[lang]);
+   log('pedidos',{es:`entendió el mensaje de Carlos y guardó ${o.n} (2 × Pista de autos, retira el sábado) para preparar`,en:`understood Carlos's message and saved ${o.n} (2 × Car track, pickup Saturday) for preparation`,pt:`entendeu a mensagem do Carlos e salvou ${o.n} (2 × Pista de carros, retira sábado) para preparar`});
+   setTimeout(()=>{const r={id:S.rseq++,to:'Nico',what:'prep',ref:o.n,st:'pend'};S.reqs.unshift(r);say('vendedores',{es:'Se lo pasé a Nico',en:'Passed it to Nico',pt:'Passei para o Nico'});log('vendedores',{es:`le mandó a Nico a su app: preparar ${o.n}`,en:`sent Nico in his app: prepare ${o.n}`,pt:`mandou ao Nico no app: preparar ${o.n}`});renderBoard();
+     setTimeout(()=>{if(r.st==='pend'){r.st='avz';log('vendedores',{es:`Nico tomó ${o.n} desde la app y está avanzando`,en:`Nico picked up ${o.n} in the app`,pt:`Nico pegou ${o.n} no app`});renderBoard();}},6000);},1800);},
+ ()=>{S.convs.unshift({who:'Pedro',st:'derivada',last:'(audio) Quiero hablar con alguien por un cambio',mins:0});
+   say('atencion',{es:'Pedro pidió una persona: pausé el bot',en:'Pedro asked for a person: bot paused',pt:'Pedro pediu uma pessoa: bot pausado'}[lang]);
+   log('atencion',{es:'transcribió el audio de Pedro, pausó el bot y lo derivó con el historial',en:'transcribed Pedro\'s audio, paused the bot and handed off with history',pt:'transcreveu o áudio do Pedro, pausou o bot e encaminhou com o histórico'},'auto');
+   setTimeout(()=>{say('seguimiento',{es:'Alerta: Pedro espera',en:'Alert: Pedro is waiting',pt:'Alerta: Pedro aguarda'}[lang]);},2500);},
+ ()=>{const c=S.convs.find(c=>c.who==='Paula');if(c){c.st='resuelta';c.last='Sí, confirmo';}
+   const o={n:'J-0'+(S.seq++),client:'Paula Méndez',items:[['JT-03',1]],deliv:'pickup',st:'conf',av:'reserv',pay:'sinpagar',who:'',origin:'wa'};S.orders.unshift(o);P('JT-03').reserved++;
+   say('pedidos',{es:`Paula confirmó: ${o.n}`,en:`Paula confirmed: ${o.n}`,pt:`Paula confirmou: ${o.n}`}[lang]);
+   log('pedidos',{es:`registró ${o.n} de Paula (1 × Juego de té, $12.900) una sola vez`,en:`logged ${o.n} for Paula (1 × Tea set, $12,900) exactly once`,pt:`registrou ${o.n} da Paula (1 × Jogo de chá, $12.900) uma única vez`},'auto');
+   setTimeout(()=>{say('stock',{es:'Reservé 1 por 24 h',en:'Reserved 1 for 24 h',pt:'Reservei 1 por 24 h'}[lang]);log('stock',{es:'reservó 1 Juego de té por 24 h',en:'reserved 1 Tea set for 24 h',pt:'reservou 1 Jogo de chá por 24 h'},'auto');renderBoard();},1600);},
+ ()=>{const o=S.orders.find(o=>o.n==='J-0141');
+   say('seguimiento',{es:'Le recordé a Laura el retiro de las 17',en:'Reminded Laura about the 5 pm pickup',pt:'Lembrei a Laura da retirada às 17h'}[lang]);
+   log('seguimiento',{es:'le recordó a Laura que J-0141 está listo, con envoltorio, para retirar a las 17',en:'reminded Laura that J-0141 is ready, gift-wrapped, for 5 pm pickup',pt:'lembrou a Laura que o J-0141 está pronto, embrulhado, para retirar às 17h'},'auto');}
+];
+let evIdx=0, live=true, evTimer=null;
+function nextEvent(){ if(!live||evIdx>=EVENTS.length) return; EVENTS[evIdx++](); renderBoard(); evTimer=setTimeout(nextEvent, 14000); }
+$('#rush').onclick=()=>{rush=!rush;$('#rush').setAttribute('aria-pressed',String(rush));renderBoard();};
+
+/* ---------- idioma ---------- */
+function applyLang(){
+  document.documentElement.lang=lang;
+  document.querySelectorAll('[data-i]').forEach(e=>{const v=L[lang][e.dataset.i]; if(typeof v==='string') e.textContent=v;});
+  BOTS.forEach(b=>{const el=botEls[b.id]; el.querySelector('.nm').textContent=b.name[lang]; el.setAttribute('aria-label',b.name[lang]+': '+b.does[lang]);});
+  $('#lang').value=lang; $('#bTourTxt').textContent=tr({es:'¿Cómo se usa?',en:'How does it work?',pt:'Como se usa?'}); $('#rush').title=tr({es:'Ordena los pendientes: primero lo que tiene horario acordado o espera hace más tiempo',en:'Sorts to-dos: first what has a set time or has waited longest',pt:'Ordena as pendências: primeiro o que tem horário ou espera há mais tempo'}); renderBoard(); renderTV(); renderFeed();
+}
+$('#lang').onchange=e=>{lang=e.target.value;store.set('lang',lang);applyLang(); if(drawerView) refreshDrawer(true);};
+
+applyLang();
+setTimeout(()=>say('local',{es:'¡Hola! Arrastrame o tocame para hablar',en:'Hi! Drag me or tap to talk',pt:'Oi! Me arraste ou toque para falar'}[lang],5000),800);
+evTimer=setTimeout(nextEvent,4000);
+})();
+</script>
+
+</body>
+</html>
