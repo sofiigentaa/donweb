@@ -16,6 +16,7 @@ python3 -m venv .venv
 source .venv/bin/activate
 pip install -r requirements.txt
 cp .env.example .env
+alembic upgrade head
 uvicorn app.main:app --reload --host 127.0.0.1 --port 8000
 ```
 
@@ -28,9 +29,9 @@ Documentación interactiva: `http://127.0.0.1:8000/docs`.
 - `GET /api/v1/health`: estado del proceso.
 - `GET /api/v1/health/ready`: comprueba también la conexión con la base de datos.
 
-## Base de datos
+## Base de datos y migraciones
 
-Configurar `DATABASE_URL` en el archivo `.env`. El valor de ejemplo usa PostgreSQL local. No subir nunca el archivo `.env` real al repositorio.
+Configurar `DATABASE_URL` en el archivo `.env`. El valor de ejemplo usa PostgreSQL local. Ejecutar `alembic upgrade head` para crear el esquema inicial. No subir nunca el archivo `.env` real al repositorio.
 
 ## Estado
 
