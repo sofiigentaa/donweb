@@ -1110,6 +1110,173 @@ $('#lang').onchange=e=>{lang=e.target.value;store.set('lang',lang);applyLang(); 
 applyLang();
 setTimeout(()=>say('local',{es:'¡Hola! Arrastrame o tocame para hablar',en:'Hi! Drag me or tap to talk',pt:'Oi! Me arraste ou toque para falar'}[lang],5000),800);
 evTimer=setTimeout(nextEvent,4000);
+window.PANEL = { S };
+if (typeof renderTV === 'function') window.PANEL.renderTV = renderTV;
+if (typeof renderBoard === 'function') window.PANEL.renderBoard = renderBoard;
+})();
+</script>
+
+<script>
+/* === ADAPTER API (agregado 2026-11-04) === */
+(function(){
+  const API = 'http://127.0.0.1:8000/api/v1';
+
+  function mapProduct(p){
+    return {
+      code: p.sku,
+      name: p.name,
+      age: p.min_age ?? 0,
+      price: Number(p.price),
+      stock: p.stock_quantity,
+      trust: p.stock_trust,
+      reserved: p.reserved_quantity,
+      color: p.color || '#999'
+    };
+  }
+
+  async function loadProducts(){
+    try {
+      const r = await fetch(API + '/products?limit=300');
+      if (!r.ok) throw new Error('HTTP ' + r.status);
+      const data = await r.json();
+      if (!Array.isArray(data) || data.length === 0) return;
+      const mapped = data.map(mapProduct);
+      const S = window.PANEL && window.PANEL.S;
+      if (!S || !Array.isArray(S.products)) { console.warn('[api] PANEL.S no disponible'); return; }
+      S.products.length = 0;
+      S.products.push(...mapped);
+      if (typeof window.PANEL.renderTV === 'function') window.PANEL.renderTV();
+      if (typeof window.PANEL.renderBoard === 'function') window.PANEL.renderBoard();
+      console.log('[api] productos cargados desde PostgreSQL:', mapped.length);
+    } catch(e){
+      console.warn('[api] backend no disponible, usando datos demo:', e.message);
+    }
+  }
+
+  // ---------------------------------------------------------------------
+  // Persistencia de pedidos: cuando el panel simula crear un pedido,
+  // también lo enviamos al backend (fire-and-forget, no bloquea la UI).
+  // ---------------------------------------------------------------------
+  function orderToPayload(o){
+    return {
+      order_number: typeof o.n === 'string' ? o.n : null,
+      customer_name: o.client || 'Cliente sin nombre',
+      items: (o.items || []).map(([sku, qty]) => ({ sku, quantity: qty })),
+      fulfillment: o.deliv === 'ship' ? 'ship' : 'pickup',
+      status: o.st || 'pend',
+      availability: o.av || null,
+      payment_status: o.pay || null,
+      origin: o.origin || 'web',
+      gift_wrap: !!o.wrap,
+      notes: o.note || null,
+      seller_name: o.who || null
+    };
+  }
+
+  async function postOrder(o){
+    const payload = orderToPayload(o);
+    if (!payload.items.length) return;
+    try {
+      const r = await fetch(API + '/orders', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+      });
+      const data = await r.json().catch(() => ({}));
+      if (!r.ok) {
+        console.warn('[api] POST /orders falló:', r.status, data.detail || '');
+        return;
+      }
+      console.log('[api] pedido persistido:', data.order_number, '→ db id', data.id);
+      // Refrescar stock desde la DB para reflejar el descuento
+      loadProducts();
+    } catch(e){
+      console.warn('[api] backend no disponible para POST /orders:', e.message);
+    }
+  }
+
+  function patchOrdersUnshift(){
+    const S = window.PANEL && window.PANEL.S;
+    if (!S || !Array.isArray(S.orders)) return false;
+    if (S.orders.__patched) return true;
+    const origUnshift = S.orders.unshift.bind(S.orders);
+    S.orders.unshift = function(...items){
+      items.forEach(o => postOrder(o));
+      return origUnshift(...items);
+    };
+    S.orders.__patched = true;
+    console.log('[api] S.orders.unshift parcheado: pedidos nuevos irán al backend');
+    return true;
+  }
+
+  // ---------------------------------------------------------------------
+  // Lectura de pedidos desde PostgreSQL: en el arranque, reemplaza S.orders
+  // con los pedidos reales y sincroniza S.seq para no chocar números.
+  // ---------------------------------------------------------------------
+  function mapOrder(o){
+    return {
+      n: o.order_number,
+      client: o.customer_name,
+      items: (o.items || []).map(i => [i.sku, i.quantity]),
+      deliv: o.fulfillment,
+      st: o.status,
+      av: o.availability || 'sinver',
+      pay: o.payment_status || 'sinpagar',
+      who: o.seller_name || '',
+      wrap: !!o.gift_wrap,
+      origin: o.origin || 'web',
+      note: o.notes || '',
+      __dbId: o.id
+    };
+  }
+
+  async function loadOrders(){
+    try {
+      const r = await fetch(API + '/orders?limit=500');
+      if (!r.ok) throw new Error('HTTP ' + r.status);
+      const data = await r.json();
+      const S = window.PANEL && window.PANEL.S;
+      if (!S || !Array.isArray(S.orders)) { console.warn('[api] PANEL.S.orders no disponible'); return; }
+      if (data.length > 0) {
+        S.orders.length = 0;
+        S.orders.push(...data.map(mapOrder));
+      }
+      // Sync S.seq al máximo de pedidos de la DB + 1
+      const nums = data
+        .map(o => parseInt(String(o.order_number || '').replace(/^J-/, ''), 10))
+        .filter(n => !isNaN(n));
+      if (nums.length) {
+        S.seq = Math.max(...nums) + 1;
+      }
+      if (typeof window.PANEL.renderBoard === 'function') window.PANEL.renderBoard();
+      console.log('[api] pedidos cargados desde PostgreSQL:', data.length, '| S.seq =', S.seq);
+    } catch(e){
+      console.warn('[api] backend no disponible para GET /orders:', e.message);
+    }
+  }
+
+  // Exponer helpers para debug desde la consola del navegador
+  window.PANEL = window.PANEL || {};
+  window.PANEL.apiTest = {
+    postOrder,
+    loadOrders,
+    loadProducts,
+    listOrders: async () => {
+      const r = await fetch(API + '/orders');
+      return r.json();
+    },
+    listProducts: async () => {
+      const r = await fetch(API + '/products?limit=300');
+      return r.json();
+    }
+  };
+
+  async function bootstrap(){
+    await Promise.all([loadProducts(), loadOrders()]);
+    if (!patchOrdersUnshift()) setTimeout(patchOrdersUnshift, 200);
+  }
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', bootstrap);
+  else bootstrap();
 })();
 </script>
 

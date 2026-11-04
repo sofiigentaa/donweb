@@ -36,6 +36,9 @@ class Product(TimestampMixin, Base):
     stock_quantity: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
     reserved_quantity: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
     photo_url: Mapped[str | None] = mapped_column(String(1000))
+    min_age: Mapped[int | None] = mapped_column(Integer)
+    stock_trust: Mapped[str] = mapped_column(String(20), default="al día", server_default="al día", nullable=False)
+    color: Mapped[str | None] = mapped_column(String(20))
     active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
 
 
@@ -60,8 +63,13 @@ class CustomerOrder(TimestampMixin, Base):
     fulfillment: Mapped[str] = mapped_column(String(20), default="pickup")
     notes: Mapped[str | None] = mapped_column(Text)
     total: Mapped[Decimal] = mapped_column(Numeric(12, 2), default=Decimal("0.00"))
+    availability: Mapped[str | None] = mapped_column(String(20))
+    payment_status: Mapped[str | None] = mapped_column(String(30))
+    origin: Mapped[str | None] = mapped_column(String(20))
+    gift_wrap: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
 
     customer: Mapped[Customer] = relationship()
+    seller: Mapped[Seller | None] = relationship()
     items: Mapped[list["OrderItem"]] = relationship(
         back_populates="order", cascade="all, delete-orphan"
     )
