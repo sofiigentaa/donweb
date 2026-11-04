@@ -9,9 +9,10 @@ from sqlalchemy import func, text
 
 from app.database import get_db
 from app.models import (
-    Customer, CustomerOrder, OrderItem, Product, Seller, StockMovement, Task,
+    ActivityLog, Customer, CustomerOrder, OrderItem, Product, Seller, StockMovement, Task,
 )
 from app.schemas import (
+    ActivityLogCreate, ActivityLogRead,
     CustomerCreate, CustomerRead, OrderCreate, OrderRead,
     ProductCreate, ProductRead, TaskCreate, TaskRead,
 )
@@ -245,3 +246,24 @@ def get_order(order_number: str, db: Session = Depends(get_db)):
     if not order:
         raise HTTPException(status_code=404, detail=f"Pedido no encontrado: {order_number}")
     return _order_to_dict(order)
+
+
+# ---------- Activity Logs ----------
+
+
+@router.get("/activity-logs", response_model=list[ActivityLogRead], tags=["activity"])
+def list_activity_logs(
+    limit: int = Query(default=50, ge=1, le=200),
+    db: Session = Depends(get_db),
+):
+    statement = select(ActivityLog).order_by(ActivityLog.created_at.desc()).limit(limit)
+    return db.scalars(statement).all()
+
+
+@router.post("/activity-logs", response_model=ActivityLogRead, status_code=status.HTTP_201_CREATED, tags=["activity"])
+def create_activity_log(payload: ActivityLogCreate, db: Session = Depends(get_db)):
+    log = ActivityLog(**payload.model_dump())
+    db.add(log)
+    db.commit()
+    db.refresh(log)
+    return log

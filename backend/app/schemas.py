@@ -96,3 +96,15 @@ class OrderRead(BaseModel):
     total: Decimal
     created_at: datetime
     items: list[OrderItemRead]
+
+
+class ActivityLogCreate(BaseModel):
+    actor_type: str = Field(min_length=2, max_length=30)
+    action: str = Field(max_length=100)
+    entity_type: str = Field(default="activity", max_length=60)
+    details: str | None = None
+
+class ActivityLogRead(ActivityLogCreate):
+    id: int
+    created_at: datetime
+    model_config = ConfigDict(from_attributes=True)

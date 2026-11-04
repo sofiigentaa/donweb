@@ -1110,8 +1110,9 @@ $('#lang').onchange=e=>{lang=e.target.value;store.set('lang',lang);applyLang(); 
 applyLang();
 setTimeout(()=>say('local',{es:'¡Hola! Arrastrame o tocame para hablar',en:'Hi! Drag me or tap to talk',pt:'Oi! Me arraste ou toque para falar'}[lang],5000),800);
 evTimer=setTimeout(nextEvent,4000);
-window.PANEL = { S };
+window.PANEL = { S, feed };
 if (typeof renderTV === 'function') window.PANEL.renderTV = renderTV;
+if (typeof renderFeed === 'function') window.PANEL.renderFeed = renderFeed;
 if (typeof renderBoard === 'function') window.PANEL.renderBoard = renderBoard;
 })();
 </script>
@@ -1337,6 +1338,84 @@ if (typeof renderBoard === 'function') window.PANEL.renderBoard = renderBoard;
     }
   }
 
+  // ---------------------------------------------------------------------
+  // Persistencia del Feed de Actividad (Lo que hicieron los asistentes)
+  // ---------------------------------------------------------------------
+  function activityToPayload(f){
+    return {
+      actor_type: f.bot || 'system',
+      action: f.kind || 'auto',
+      // Guardamos el objeto multi-idioma como string JSON
+      details: JSON.stringify(f.text)
+    };
+  }
+
+  async function postActivity(f){
+    const payload = activityToPayload(f);
+    try {
+      const resp = await fetch(API + '/activity-logs', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+      });
+      if (!resp.ok) {
+        console.warn('[api] POST /activity-logs falló:', resp.status);
+        return;
+      }
+      console.log('[api] log de actividad persistido');
+    } catch(e){
+      console.warn('[api] backend no disponible para POST /activity-logs:', e.message);
+    }
+  }
+
+  function patchFeedUnshift(){
+    if (!window.PANEL || !Array.isArray(window.PANEL.feed)) return false;
+    const feed = window.PANEL.feed;
+    if (feed.__patched) return true;
+    
+    const origUnshift = feed.unshift.bind(feed);
+    feed.unshift = function(...items){
+      items.forEach(f => postActivity(f));
+      return origUnshift(...items);
+    };
+    feed.__patched = true;
+    console.log('[api] feed.unshift parcheado: historial irá al backend');
+    return true;
+  }
+
+  async function loadActivity(){
+    try {
+      const resp = await fetch(API + '/activity-logs?limit=50');
+      if (!resp.ok) throw new Error('HTTP ' + resp.status);
+      const data = await resp.json();
+      if (!window.PANEL || !Array.isArray(window.PANEL.feed)) return;
+      
+      const feed = window.PANEL.feed;
+      // Mapear de vuelta al formato del frontend
+      const mapped = data.map(l => {
+        let text = l.details;
+        try { text = JSON.parse(l.details); } catch(e) {}
+        return {
+          bot: l.actor_type,
+          kind: l.action,
+          text: text,
+          at: new Date(l.created_at)
+        };
+      });
+      
+      if (mapped.length > 0) {
+        // Reemplazamos el contenido respetando la referencia original del array
+        feed.length = 0;
+        feed.push(...mapped);
+      }
+      
+      if (typeof window.PANEL.renderFeed === 'function') window.PANEL.renderFeed();
+      console.log('[api] historial de actividad cargado:', mapped.length);
+    } catch(e){
+      console.warn('[api] backend no disponible para GET /activity-logs:', e.message);
+    }
+  }
+
   // Exponer helpers para debug desde la consola del navegador
   window.PANEL = window.PANEL || {};
   window.PANEL.apiTest = {
@@ -1344,6 +1423,7 @@ if (typeof renderBoard === 'function') window.PANEL.renderBoard = renderBoard;
     loadOrders,
     loadProducts,
     loadTasks,
+    loadActivity,
     listOrders: async () => {
       const r = await fetch(API + '/orders');
       return r.json();
@@ -1355,9 +1435,10 @@ if (typeof renderBoard === 'function') window.PANEL.renderBoard = renderBoard;
   };
 
   async function bootstrap(){
-    await Promise.all([loadProducts(), loadOrders(), loadTasks()]);
+    await Promise.all([loadProducts(), loadOrders(), loadTasks(), loadActivity()]);
     if (!patchOrdersUnshift()) setTimeout(patchOrdersUnshift, 200);
     if (!patchTasksUnshift()) setTimeout(patchTasksUnshift, 200);
+    if (!patchFeedUnshift()) setTimeout(patchFeedUnshift, 200);
   }
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', bootstrap);
   else bootstrap();
