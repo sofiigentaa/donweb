@@ -1255,12 +1255,95 @@ if (typeof renderBoard === 'function') window.PANEL.renderBoard = renderBoard;
     }
   }
 
+  // ---------------------------------------------------------------------
+  // Persistencia de Tareas de Vendedores (asistente "vendedores")
+  // ---------------------------------------------------------------------
+  function taskToPayload(r){
+    const whatMap = { prep: 'Preparar un pedido', stock: 'Consultar stock', client: 'Atender a un cliente', other: 'Otra cosa' };
+    const whatText = whatMap[r.what] || r.what;
+    return {
+      title: `${r.to}: ${whatText}`.substring(0, 200),
+      description: r.ref || null,
+      assistant: 'vendedores',
+      priority: 'normal',
+      status: r.st === 'pend' ? 'pending' : (r.st === 'avz' ? 'in_progress' : 'done')
+    };
+  }
+
+  async function postTask(r){
+    const payload = taskToPayload(r);
+    try {
+      const resp = await fetch(API + '/tasks', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+      });
+      if (!resp.ok) {
+        console.warn('[api] POST /tasks falló:', resp.status);
+        return;
+      }
+      const data = await resp.json();
+      console.log('[api] tarea persistida:', data.title, '→ db id', data.id);
+    } catch(e){
+      console.warn('[api] backend no disponible para POST /tasks:', e.message);
+    }
+  }
+
+  function patchTasksUnshift(){
+    const S = window.PANEL && window.PANEL.S;
+    if (!S || !Array.isArray(S.reqs)) return false;
+    if (S.reqs.__patched) return true;
+    const origUnshift = S.reqs.unshift.bind(S.reqs);
+    S.reqs.unshift = function(...items){
+      items.forEach(r => postTask(r));
+      return origUnshift(...items);
+    };
+    S.reqs.__patched = true;
+    console.log('[api] S.reqs.unshift parcheado: tareas nuevas irán al backend');
+    return true;
+  }
+
+  async function loadTasks(){
+    try {
+      const resp = await fetch(API + '/tasks?status=all');
+      if (!resp.ok) throw new Error('HTTP ' + resp.status);
+      const data = await resp.json();
+      const S = window.PANEL && window.PANEL.S;
+      if (!S || !Array.isArray(S.reqs)) return;
+      
+      // Solo mapeamos las que son de vendedores para no ensuciar la vista
+      const mapped = data.filter(t => t.assistant === 'vendedores').map(t => {
+        const parts = t.title.split(': ');
+        return {
+          id: t.id,
+          to: parts[0] || 'Vendedor',
+          what: t.description && t.description.startsWith('J-') ? 'prep' : 'other',
+          ref: t.description || '',
+          st: t.status === 'pending' ? 'pend' : (t.status === 'in_progress' ? 'avz' : 'listo')
+        };
+      });
+      
+      if (mapped.length > 0) {
+        S.reqs = mapped; // Reemplazamos el array para que renderSellers funcione
+        // Como S.reqs es reemplazado, debemos volver a parchearlo
+        S.reqs.__patched = false;
+        patchTasksUnshift();
+      }
+      
+      if (typeof window.PANEL.renderBoard === 'function') window.PANEL.renderBoard();
+      console.log('[api] tareas cargadas desde PostgreSQL:', mapped.length);
+    } catch(e){
+      console.warn('[api] backend no disponible para GET /tasks:', e.message);
+    }
+  }
+
   // Exponer helpers para debug desde la consola del navegador
   window.PANEL = window.PANEL || {};
   window.PANEL.apiTest = {
     postOrder,
     loadOrders,
     loadProducts,
+    loadTasks,
     listOrders: async () => {
       const r = await fetch(API + '/orders');
       return r.json();
@@ -1272,8 +1355,9 @@ if (typeof renderBoard === 'function') window.PANEL.renderBoard = renderBoard;
   };
 
   async function bootstrap(){
-    await Promise.all([loadProducts(), loadOrders()]);
+    await Promise.all([loadProducts(), loadOrders(), loadTasks()]);
     if (!patchOrdersUnshift()) setTimeout(patchOrdersUnshift, 200);
+    if (!patchTasksUnshift()) setTimeout(patchTasksUnshift, 200);
   }
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', bootstrap);
   else bootstrap();
