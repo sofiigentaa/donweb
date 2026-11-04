@@ -35,6 +35,7 @@ python3 -m venv .venv
 source .venv/bin/activate
 pip install -r requirements.txt
 cp .env.example .env
+alembic upgrade head
 uvicorn app.main:app --reload --host 127.0.0.1 --port 8000
 ```
 
@@ -49,5 +50,7 @@ Abrí `http://127.0.0.1:8000/docs` para explorar la API.
 - `GET /api/v1/tasks` y `POST /api/v1/tasks`
 
 ### Importante
+
+Las tablas iniciales se crean mediante Alembic con `alembic upgrade head`.
 
 Esta rama es una base de desarrollo, no una versión lista para producción. Antes de publicar operaciones reales faltan migraciones de base de datos, autenticación y autorización, integración de la interfaz, pruebas de negocio, auditoría completa y configuración de despliegue. Los datos de demostración del frontend todavía no se migraron.
