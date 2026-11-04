@@ -5,10 +5,11 @@ from sqlalchemy.exc import SQLAlchemyError
 
 from app.config import settings
 from app.database import engine
+from app.routers import router as business_router
 
 app = FastAPI(
     title=settings.app_name,
-    version="0.1.0",
+    version="0.2.0",
     description="API del Panel Caballito y Muñequita.",
 )
 
@@ -19,6 +20,8 @@ app.add_middleware(
     allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE"],
     allow_headers=["Authorization", "Content-Type"],
 )
+
+app.include_router(business_router, prefix=settings.api_prefix)
 
 
 @app.get("/", tags=["system"])
