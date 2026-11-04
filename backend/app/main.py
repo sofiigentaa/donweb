@@ -1,4 +1,4 @@
-from fastapi import FastAPI
+from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy import text
 from sqlalchemy.exc import SQLAlchemyError
@@ -40,5 +40,5 @@ def readiness() -> dict[str, str]:
         with engine.connect() as connection:
             connection.execute(text("SELECT 1"))
         return {"status": "ready", "database": "connected"}
-    except SQLAlchemyError:
-        return {"status": "not_ready", "database": "unavailable"}
+    except SQLAlchemyError as exc:
+        raise HTTPException(status_code=503, detail="Base de datos no disponible.") from exc
