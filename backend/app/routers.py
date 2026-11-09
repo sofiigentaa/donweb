@@ -607,6 +607,9 @@ def chat_with_ai(payload: ChatRequest, db: Session = Depends(get_db)):
     }
     if settings.llm_model:
         request_body["model"] = settings.llm_model
+        if "gpt-oss" in settings.llm_model:
+            # Modelo que razona: poco razonamiento alcanza y deja tokens para la respuesta.
+            request_body["reasoning_effort"] = "low"
     headers = {"Authorization": f"Bearer {settings.llm_api_key}"} if settings.llm_api_key else {}
 
     try:

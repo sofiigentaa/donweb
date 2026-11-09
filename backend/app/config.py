@@ -12,7 +12,7 @@ class Settings(BaseSettings):
     # Cualquier API compatible con OpenAI: llama.cpp local, Groq, OpenRouter, etc.
     llama_base_url: str = "https://api.groq.com/openai/v1"
     llm_api_key: str = ""
-    llm_model: str = "llama-3.3-70b-versatile"
+    llm_model: str = "openai/gpt-oss-120b"
     llm_timeout: float = 60.0
     secret_key: str = "dev-only-change-me"
 
