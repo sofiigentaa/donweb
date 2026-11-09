@@ -108,3 +108,53 @@ class ActivityLogRead(ActivityLogCreate):
     id: int
     created_at: datetime
     model_config = ConfigDict(from_attributes=True)
+
+
+class ChatMessage(BaseModel):
+    role: str
+    content: str
+
+class ChatRequest(BaseModel):
+    messages: list[ChatMessage]
+    assistant: str = Field(default="atencion")
+
+class ChatResponse(BaseModel):
+    reply: str
+
+
+class TaskUpdate(BaseModel):
+    status: str = Field(pattern="^(pending|in_progress|done)$")
+
+
+class SellerRead(BaseModel):
+    id: int
+    name: str
+    email: str | None
+    active: bool
+    model_config = ConfigDict(from_attributes=True)
+
+class LoginRequest(BaseModel):
+    email: str
+    password: str
+    totp_code: str | None = None
+
+class TokenResponse(BaseModel):
+    access_token: str
+    token_type: str
+    role: str
+    name: str
+
+class CustomerRegister(BaseModel):
+    name: str
+    email: str
+    password: str
+
+class SellerCreate(BaseModel):
+    name: str
+    email: str
+    password: str
+    phone: str | None = None
+
+
+class CustomerRegisterResponse(TokenResponse):
+    qr_base64: str | None = None

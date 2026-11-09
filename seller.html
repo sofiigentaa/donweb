@@ -1,0 +1,435 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>App Vendedores - Juguetería</title>
+    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;600;700&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --bg: #f4f7f6;
+            --surface: #ffffff;
+            --text-main: #1e293b;
+            --text-muted: #64748b;
+            --primary: #159c9c; /* El verde/teal de Vendedores */
+            --primary-light: #e0f2f1;
+            --warning: #f59e0b;
+            --success: #10b981;
+            --danger: #ef4444;
+            --radius: 16px;
+            --shadow: 0 4px 20px rgba(0,0,0,0.05);
+        }
+
+        * { box-sizing: border-box; margin: 0; padding: 0; font-family: 'Plus Jakarta Sans', sans-serif; }
+
+        body {
+            background-color: var(--bg);
+            color: var(--text-main);
+            display: flex;
+            justify-content: center;
+            min-height: 100vh;
+        }
+
+        /* Contenedor tipo App Móvil */
+        .app-container {
+            width: 100%;
+            max-width: 480px; /* Ancho máximo para que se vea bien en PC */
+            padding: 20px;
+            display: flex;
+            flex-direction: column;
+            gap: 20px;
+        }
+
+        /* Header */
+        .header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 10px 0;
+        }
+
+        .user-profile { display: flex; align-items: center; gap: 12px; }
+        
+        .avatar {
+            width: 48px; height: 48px;
+            background: var(--primary);
+            color: white;
+            border-radius: 50%;
+            display: flex; justify-content: center; align-items: center;
+            font-size: 20px; font-weight: 700;
+            box-shadow: 0 4px 10px rgba(21, 156, 156, 0.3);
+        }
+
+        .user-info h1 { font-size: 1.2rem; font-weight: 700; color: var(--text-main); }
+        .user-info p { font-size: 0.85rem; color: var(--text-muted); font-weight: 600; }
+
+        .stats-badge {
+            background: var(--primary-light);
+            color: var(--primary);
+            padding: 8px 16px;
+            border-radius: 20px;
+            font-weight: 700;
+            font-size: 0.9rem;
+        }
+
+        /* Lista de Tareas */
+        .task-list {
+            display: flex;
+            flex-direction: column;
+            gap: 15px;
+        }
+
+        .task-card {
+            background: var(--surface);
+            border-radius: var(--radius);
+            padding: 20px;
+            box-shadow: var(--shadow);
+            position: relative;
+            overflow: hidden;
+            transition: transform 0.2s ease;
+            animation: slideUp 0.4s ease forwards;
+        }
+
+        .task-card:active { transform: scale(0.98); }
+
+        @keyframes slideUp {
+            from { opacity: 0; transform: translateY(20px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        /* Franja de color a la izquierda según el estado */
+        .task-card::before {
+            content: '';
+            position: absolute;
+            left: 0; top: 0; bottom: 0;
+            width: 6px;
+        }
+        .task-card.status-pending::before { background: var(--warning); }
+        .task-card.status-in_progress::before { background: var(--primary); }
+        .task-card.status-done::before { background: var(--success); }
+
+        .task-header {
+            display: flex; justify-content: space-between; align-items: flex-start;
+            margin-bottom: 10px;
+        }
+
+        .task-title { font-size: 1.1rem; font-weight: 700; line-height: 1.3; }
+
+        .status-pill {
+            padding: 4px 10px;
+            border-radius: 8px;
+            font-size: 0.7rem;
+            font-weight: 800;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+        .status-pending { background: #fef3c7; color: #b45309; }
+        .status-in_progress { background: #ccfbf1; color: #0f766e; }
+        .status-done { background: #d1fae5; color: #047857; }
+
+        .task-desc {
+            font-size: 0.95rem;
+            color: var(--text-muted);
+            margin-bottom: 20px;
+            line-height: 1.5;
+            background: #f8fafc;
+            padding: 10px;
+            border-radius: 8px;
+            border-left: 3px solid var(--primary);
+            font-weight: 600;
+            color: #334155;
+        }
+
+        /* Botones */
+        .actions { display: flex; gap: 10px; }
+
+        button {
+            flex: 1;
+            padding: 14px;
+            border: none;
+            border-radius: 12px;
+            font-size: 1rem;
+            font-weight: 700;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            display: flex; justify-content: center; align-items: center; gap: 8px;
+        }
+
+        .btn-start {
+            background: var(--primary);
+            color: white;
+            box-shadow: 0 4px 12px rgba(21, 156, 156, 0.3);
+        }
+        .btn-start:hover { background: #0d7a7a; }
+
+        .btn-done {
+            background: var(--success);
+            color: white;
+            box-shadow: 0 4px 12px rgba(16, 185, 129, 0.3);
+        }
+        .btn-done:hover { background: #059669; }
+
+        /* Empty State */
+        .empty-state {
+            text-align: center;
+            padding: 60px 20px;
+            display: none;
+        }
+        .empty-icon {
+            font-size: 4rem;
+            margin-bottom: 20px;
+            opacity: 0.5;
+        }
+        .empty-state h2 { color: var(--text-main); margin-bottom: 8px; }
+        .empty-state p { color: var(--text-muted); }
+
+        /* Loading Spinner */
+        .loader {
+            border: 4px solid #f3f3f3;
+            border-top: 4px solid var(--primary);
+            border-radius: 50%;
+            width: 30px; height: 30px;
+            animation: spin 1s linear infinite;
+            margin: 40px auto;
+        }
+        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+
+    </style>
+</head>
+<body>
+
+<!-- PANTALLA DE LOGIN -->
+<div id="login-screen" style="position:fixed; inset:0; background:var(--bg); z-index:9999; display:flex; justify-content:center; align-items:center; padding:20px;">
+    <div style="background:var(--surface); padding:30px; border-radius:20px; width:100%; max-width:380px; box-shadow:var(--shadow);">
+        <h2 style="text-align:center; margin-bottom:20px;">Ingreso Vendedor</h2>
+        <input type="email" id="log-email" placeholder="Email" style="width:100%; padding:12px; margin-bottom:10px; border:1px solid #ccc; border-radius:8px;">
+        <input type="password" id="log-pass" placeholder="Contraseña" style="width:100%; padding:12px; margin-bottom:10px; border:1px solid #ccc; border-radius:8px;">
+        <input type="text" id="log-totp" placeholder="Código de 6 dígitos (si tenés 2FA)" style="width:100%; padding:12px; margin-bottom:15px; border:1px solid #ccc; border-radius:8px; display:none;">
+        <button onclick="doLogin()" style="width:100%; padding:14px; background:var(--primary); color:white; border:none; border-radius:8px; font-weight:bold; cursor:pointer;">Ingresar</button>
+        <p style="text-align:center; font-size:0.8rem; color:#64748b; margin-top:15px;">Solo personal autorizado.</p>
+    </div>
+</div>
+
+<script>
+    // La constante API se declara en el bloque principal de abajo
+    let authToken = localStorage.getItem('sellerToken');
+
+    // Si ya hay token, ocultar login y cargar
+    if (authToken) {
+        document.getElementById('login-screen').style.display = 'none';
+    }
+
+    function logout() {
+        localStorage.removeItem('sellerToken');
+        localStorage.removeItem('sellerName');
+        window.location.reload(); // Recarga la página para mostrar el login
+    }
+
+    async function doLogin() {
+        const email = document.getElementById('log-email').value;
+        const password = document.getElementById('log-pass').value;
+        const totp = document.getElementById('log-totp').value;
+        
+        try {
+            const r = await fetch(API + '/auth/login', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ email, password, totp_code: totp })
+            });
+            const data = await r.json();
+            
+            if (r.ok) {
+                localStorage.setItem('sellerToken', data.access_token);
+                localStorage.setItem('sellerName', data.name);
+                authToken = data.access_token;
+                document.getElementById('login-screen').style.display = 'none';
+                // Actualizar nombre en la UI
+                document.getElementById('seller-select').innerHTML = `<option value="${data.name}">${data.name}</option>`;
+                document.getElementById('avatar').textContent = data.name.charAt(0).toUpperCase();
+                document.querySelector('.user-info p').textContent = "Vendedor";
+                loadTasks();
+            } else if (data.detail === "2FA_REQUIRED") {
+                document.getElementById('log-totp').style.display = 'block';
+                alert("Por favor, ingresá tu código de 6 dígitos de Google Authenticator.");
+            } else {
+                alert("Error: " + data.detail);
+            }
+        } catch(e) {
+            alert("Error de conexión con el servidor");
+        }
+    }
+</script>
+
+<div class="app-container">
+    <div class="header">
+        <div class="user-profile">
+            <div class="avatar" id="avatar">N</div>
+            <div class="user-info">
+                <select id="seller-select" style="border: none; background: transparent; font-size: 1.2rem; font-weight: 700; color: var(--text-main); outline: none; cursor: pointer; font-family: inherit;">
+                    <option value="Nico">Nico</option>
+                    <option value="Sofi">Sofi</option>
+                </select>
+                <p>Vendedor</p>
+            </div>
+        </div>
+        <div style="display: flex; align-items: center; gap: 10px;">
+            <div class="stats-badge" id="stats">0 Tareas</div>
+            <button onclick="logout()" style="background: #fee2e2; color: #ef4444; border: none; padding: 8px 12px; border-radius: 8px; font-weight: bold; cursor: pointer; font-size: 0.8rem;">Salir</button>
+        </div>
+    </div>
+
+    <div id="loading" class="loader"></div>
+    <div class="task-list" id="task-list"></div>
+    
+    <div id="empty-msg" class="empty-state">
+        <div class="empty-icon">🎉</div>
+        <h2>¡Todo al día!</h2>
+        <p>No tenés tareas pendientes por ahora.</p>
+    </div>
+</div>
+
+<script>
+    const API = location.protocol.startsWith('http') ? location.origin + '/api/v1' : 'http://127.0.0.1:8000/api/v1';
+    const sellerSelect = document.getElementById('seller-select');
+    const avatarEl = document.getElementById('avatar');
+    
+    // Ocultar el selector si está logueado (ya sabemos quién es)
+    if (localStorage.getItem('sellerName')) {
+        sellerSelect.style.display = 'none';
+        avatarEl.textContent = localStorage.getItem('sellerName').charAt(0).toUpperCase();
+        document.getElementById('stats').style.display = 'block';
+    }
+
+    sellerSelect.addEventListener('change', (e) => {
+        const name = e.target.value;
+        avatarEl.textContent = name.charAt(0).toUpperCase();
+        document.getElementById('loading').style.display = 'block';
+        loadTasks();
+    });
+    
+    async function loadTasks() {
+        try {
+            const currentSeller = localStorage.getItem('sellerName') || sellerSelect.value;
+            const r = await fetch(API + '/tasks?status=all');
+            const data = await r.json();
+            
+            // Filtramos: tareas de vendedores, no terminadas, y que el título empiece con el nombre del vendedor
+            const myTasks = data.filter(t => 
+                t.assistant === 'vendedores' && 
+                t.status !== 'done' &&
+                t.title.startsWith(currentSeller)
+            );
+            
+            // Buscamos el detalle de los productos para cada pedido
+            const enrichedTasks = await Promise.all(myTasks.map(async t => {
+                let desc = t.description || 'Sin descripción detallada';
+                
+                // Si la descripción es un número de pedido (ej. "J-0151"), buscamos sus productos
+                if (t.description && t.description.startsWith('J-')) {
+                    try {
+                        const oRes = await fetch(API + '/orders/' + t.description);
+                        if (oRes.ok) {
+                            const o = await oRes.json();
+                            const items = o.items.map(i => `${i.quantity} × ${i.product_name}`).join('\n');
+                            desc = `Cliente: ${o.customer_name}\n📦 ${items}`;
+                        }
+                    } catch(e) {}
+                }
+                return { ...t, display_desc: desc };
+            }));
+            
+            render(enrichedTasks);
+            document.getElementById('loading').style.display = 'none';
+        } catch(e) {
+            console.error(e);
+            document.getElementById('loading').style.display = 'none';
+            alert('Error conectando al servidor. Asegurate de que el backend esté encendido.');
+        }
+    }
+
+    function render(tasks) {
+        const list = document.getElementById('task-list');
+        const empty = document.getElementById('empty-msg');
+        const stats = document.getElementById('stats');
+        
+        list.innerHTML = '';
+        stats.textContent = tasks.length + (tasks.length === 1 ? ' Tarea' : ' Tareas');
+        
+        if (tasks.length === 0) {
+            empty.style.display = 'block';
+            return;
+        }
+        empty.style.display = 'none';
+
+        tasks.forEach((t, index) => {
+            const div = document.createElement('div');
+            div.className = `task-card status-${t.status}`;
+            div.style.animationDelay = `${index * 0.1}s`;
+            
+            let btnHtml = '';
+            if (t.status === 'pending') {
+                btnHtml = `<button class="btn-start" onclick="updateTask(${t.id}, 'in_progress')">
+                    <span>▶</span> Empezar a preparar
+                </button>`;
+            } else if (t.status === 'in_progress') {
+                btnHtml = `<button class="btn-done" onclick="updateTask(${t.id}, 'done')">
+                    <span>✔</span> ¡Pedido Listo!
+                </button>`;
+            }
+
+            // Un pequeño formato al estado para que se vea lindo
+            const statusText = t.status === 'pending' ? 'Pendiente' : 'En proceso';
+
+            div.innerHTML = `
+                <div class="task-header">
+                    <div class="task-title">${t.title}</div>
+                    <div class="status-pill status-${t.status}">${statusText}</div>
+                </div>
+                <div class="task-desc" style="white-space: pre-wrap;">${t.display_desc}</div>
+                <div class="actions">${btnHtml}</div>
+            `;
+            list.appendChild(div);
+        });
+    }
+
+    async function updateTask(id, newStatus) {
+        // Buscar el botón que se tocó y ponerlo en modo carga
+        const btn = event.target.closest('button');
+        if (btn) {
+            btn.disabled = true;
+            btn.innerHTML = '⏳ Guardando...';
+        }
+
+        try {
+            const r = await fetch(API + '/tasks/' + id, {
+                method: 'PATCH',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ status: newStatus })
+            });
+            
+            if (r.ok) {
+                document.getElementById('loading').style.display = 'block';
+                await loadTasks(); 
+            } else {
+                // Si el backend tira un error, lo mostramos
+                const errorData = await r.json().catch(() => ({}));
+                alert("Error del servidor: " + (errorData.detail || r.statusText));
+                if (btn) {
+                    btn.disabled = false;
+                    btn.innerHTML = 'Reintentar';
+                }
+            }
+        } catch(e) {
+            alert('Error de conexión: ' + e.message);
+            if (btn) {
+                btn.disabled = false;
+                btn.innerHTML = 'Reintentar';
+            }
+        }
+    }
+
+    loadTasks();
+    setInterval(loadTasks, 5000); // Refresca automáticamente
+</script>
+</body>
+</html>

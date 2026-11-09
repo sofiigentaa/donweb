@@ -1,0 +1,79 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Admin - Gestión de Vendedores</title>
+    <style>
+        :root { --bg: #f4f7f6; --text: #1e293b; --primary: #3b78ec; --card: #fff; }
+        body { font-family: system-ui, sans-serif; background: var(--bg); color: var(--text); margin: 0; padding: 20px; display: flex; justify-content: center; }
+        .container { width: 100%; max-width: 500px; }
+        .card { background: var(--card); padding: 30px; border-radius: 16px; box-shadow: 0 4px 20px rgba(0,0,0,0.05); }
+        h1 { font-size: 1.5rem; margin-top: 0; text-align: center; }
+        label { font-size: 0.9rem; font-weight: 600; color: #64748b; display: block; margin: 15px 0 5px; }
+        input { width: 100%; padding: 12px; border: 1px solid #cbd5e1; border-radius: 8px; box-sizing: border-box; outline: none; }
+        button { width: 100%; padding: 14px; background: var(--primary); color: white; border: none; border-radius: 8px; font-weight: bold; font-size: 1rem; margin-top: 20px; cursor: pointer; }
+        .qr-result { display: none; text-align: center; margin-top: 30px; padding-top: 20px; border-top: 1px dashed #cbd5e1; }
+        .qr-result img { width: 200px; height: 200px; border: 4px solid #fff; box-shadow: 0 4px 12px rgba(0,0,0,0.1); }
+        .qr-result p { font-size: 0.9rem; color: #64748b; margin-top: 10px; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="card">
+            <h1>Crear Vendedor</h1>
+            <label>Nombre</label>
+            <input type="text" id="name" placeholder="Ej. Sofi">
+            <label>Email</label>
+            <input type="email" id="email" placeholder="sofi@jugueteria.com">
+            <label>Contraseña</label>
+            <input type="password" id="password" placeholder="Clave segura">
+            <label>Teléfono (opcional)</label>
+            <input type="text" id="phone" placeholder="123456">
+            <button onclick="createSeller()">Crear Vendedor y Generar QR</button>
+
+            <div class="qr-result" id="qr-result">
+                <h3>¡Vendedor Creado!</h3>
+                <p>Pedile a <b id="res-name"></b> que escanee este código con Google Authenticator:</p>
+                <img id="qr-img" src="" alt="QR 2FA">
+            </div>
+        </div>
+    </div>
+    <script>
+        async function createSeller() {
+            const btn = event.target;
+            btn.textContent = "Creando...";
+            btn.disabled = true;
+
+            const payload = {
+                name: document.getElementById('name').value,
+                email: document.getElementById('email').value,
+                password: document.getElementById('password').value,
+                phone: document.getElementById('phone').value
+            };
+
+            try {
+                const r = await fetch((location.protocol.startsWith('http') ? location.origin + '/api/v1' : 'http://127.0.0.1:8000/api/v1') + '/admin/sellers', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload)
+                });
+                const data = await r.json();
+                
+                if (r.ok) {
+                    document.getElementById('qr-result').style.display = 'block';
+                    document.getElementById('res-name').textContent = data.name;
+                    document.getElementById('qr-img').src = 'data:image/png;base64,' + data.qr_base64;
+                } else {
+                    alert('Error: ' + data.detail);
+                }
+            } catch(e) {
+                alert('Error de conexión');
+            } finally {
+                btn.textContent = "Crear Vendedor y Generar QR";
+                btn.disabled = false;
+            }
+        }
+    </script>
+</body>
+</html>

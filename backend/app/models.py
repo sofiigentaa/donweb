@@ -23,6 +23,7 @@ class Customer(TimestampMixin, Base):
     email: Mapped[str | None] = mapped_column(String(255), index=True)
     notes: Mapped[str | None] = mapped_column(Text)
     active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
+    password_hash: Mapped[str | None] = mapped_column(String(255))
 
 
 class Product(TimestampMixin, Base):
@@ -50,6 +51,8 @@ class Seller(TimestampMixin, Base):
     phone: Mapped[str | None] = mapped_column(String(40))
     email: Mapped[str | None] = mapped_column(String(255), unique=True)
     active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
+    password_hash: Mapped[str | None] = mapped_column(String(255))
+    totp_secret: Mapped[str | None] = mapped_column(String(32))
 
 
 class CustomerOrder(TimestampMixin, Base):

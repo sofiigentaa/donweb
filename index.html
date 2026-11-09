@@ -795,7 +795,12 @@ function apply(x){
 let sampleP=null; function getSample(){ if(!sampleP) sampleP=(window.claude&&window.claude.use)?window.claude.use('sample').catch(()=>null):Promise.resolve(null); return sampleP; }
 let busy=false;
 async function ask(text){
-  if(busy||!text.trim()) return; busy=true;
+  if(busy||!text.trim()) return;
+  if(window.PANEL&&window.PANEL.chat&&window.PANEL.chat.__aiPatched){
+    chat.push({role:'me',text}); $('#chatIn').value=''; renderChat();
+    return;
+  }
+  busy=true;
   chat.push({role:'me',text}); $('#chatIn').value=''; renderChat();
   const m={role:'ai',bot:chatBot||'local',text:''}; chat.push(m); renderChat();
   say(m.bot,'…',1500);
@@ -1110,7 +1115,8 @@ $('#lang').onchange=e=>{lang=e.target.value;store.set('lang',lang);applyLang(); 
 applyLang();
 setTimeout(()=>say('local',{es:'¡Hola! Arrastrame o tocame para hablar',en:'Hi! Drag me or tap to talk',pt:'Oi! Me arraste ou toque para falar'}[lang],5000),800);
 evTimer=setTimeout(nextEvent,4000);
-window.PANEL = { S, feed };
+window.PANEL = { S, feed, chat, renderChat };
+if (typeof chatBot !== 'undefined') Object.defineProperty(window.PANEL, 'chatBot', { get: () => chatBot });
 if (typeof renderTV === 'function') window.PANEL.renderTV = renderTV;
 if (typeof renderFeed === 'function') window.PANEL.renderFeed = renderFeed;
 if (typeof renderBoard === 'function') window.PANEL.renderBoard = renderBoard;
@@ -1120,7 +1126,27 @@ if (typeof renderBoard === 'function') window.PANEL.renderBoard = renderBoard;
 <script>
 /* === ADAPTER API (agregado 2026-11-04) === */
 (function(){
-  const API = 'http://127.0.0.1:8000/api/v1';
+  const DIRECT_API = 'http://127.0.0.1:8000/api/v1';
+  let API = (location.protocol === 'http:' || location.protocol === 'https:')
+    ? location.origin + '/api/v1'
+    : DIRECT_API;
+
+  // Si el panel se sirve desde otro puerto sin proxy, volvemos al backend directo.
+  async function resolveApi(){
+    if(API === DIRECT_API) return;
+    const controller = new AbortController();
+    const timeoutId = setTimeout(()=>controller.abort(), 3000);
+    try{
+      const r = await fetch(API + '/health', { cache:'no-store', signal: controller.signal });
+      if(r.ok) return;
+    }catch(e){
+      console.warn('[api] el proxy local no respondió:', e);
+    }finally{
+      clearTimeout(timeoutId);
+    }
+    console.warn('[api] usando backend directo:', DIRECT_API);
+    API = DIRECT_API;
+  }
 
   function mapProduct(p){
     return {
@@ -1416,6 +1442,134 @@ if (typeof renderBoard === 'function') window.PANEL.renderBoard = renderBoard;
     }
   }
 
+  // ---------------------------------------------------------------------
+  // Conexión del Chat con la IA Real (Llama 3.2)
+  // ---------------------------------------------------------------------
+  let isProcessingAI = false;
+
+  function interceptChatForAI() {
+    if (!window.PANEL || !window.PANEL.chat) return false;
+    const chat = window.PANEL.chat;
+    if (chat.__aiPatched) return true;
+    
+    const origPush = chat.push.bind(chat);
+    
+    // Interceptamos cuando el usuario envía un mensaje
+    chat.push = function(...items) {
+      const res = origPush(...items);
+      const lastMsg = items[items.length - 1];
+      
+      // Solo disparamos la IA si el mensaje es del usuario y no es una nota
+      if (lastMsg && lastMsg.role === 'me' && lastMsg.text) {
+        
+        if (isProcessingAI) {
+            console.warn('[api] La IA ya está procesando un mensaje. Esperá.');
+            return res;
+        }
+        isProcessingAI = true;
+
+        const text = lastMsg.text;
+        const assistantId = window.PANEL.chatBot || 'atencion';
+        
+        // Mostrar estado pensando y bloquear input
+        const chatIn = document.getElementById('chatIn');
+        const chatSend = document.getElementById('chatSend');
+        if (chatIn) chatIn.disabled = true;
+        if (chatSend) chatSend.disabled = true;
+        
+        // Agregar mensaje temporal
+        const thinkingMsg = { role: 'note', text: 'El asistente está escribiendo...' };
+        origPush(thinkingMsg);
+        window.PANEL.renderChat();
+        
+        // Empaquetar historial (solo roles 'me' y 'ai')
+        const history = chat.filter(m => m.role === 'me' || m.role === 'ai')
+                              .map(m => ({ role: m.role === 'me' ? 'user' : 'assistant', content: m.text }));
+
+        // Hacemos la llamada a nuestro backend en Python.
+        // El backend corta a los 120 s; el navegador espera un poco más.
+        const callAI = async () => {
+          const controller = new AbortController();
+          const timeoutId = setTimeout(() => controller.abort(), 150000);
+          try {
+            let r;
+            try {
+              r = await fetch(API + '/assistant/chat', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ messages: history, assistant: assistantId }),
+                signal: controller.signal,
+                cache: 'no-store'
+              });
+            } catch (networkError) {
+              if (networkError.name !== 'AbortError' && API !== DIRECT_API) {
+                console.warn('[api] fallback al backend directo:', DIRECT_API);
+                API = DIRECT_API;
+              }
+              throw networkError;
+            }
+            const raw = await r.text();
+            let data = {};
+            try {
+              data = raw ? JSON.parse(raw) : {};
+            } catch (parseError) {
+              throw new Error('El backend devolvió una respuesta inválida (HTTP ' + r.status + ').');
+            }
+            if (!r.ok) throw new Error(data.detail || ('HTTP ' + r.status));
+            return data;
+          } finally {
+            clearTimeout(timeoutId);
+          }
+        };
+
+        (async () => {
+          let data;
+          try {
+            const retryDelays = [1500, 4000];
+            for (let attempt = 0; ; attempt++) {
+              try {
+                data = await callAI();
+                break;
+              } catch (attemptError) {
+                if (attemptError.name === 'AbortError' || attempt >= retryDelays.length) throw attemptError;
+                console.warn('[api] intento ' + (attempt + 1) + ' falló, reintentando...', attemptError);
+                await new Promise(resolve => setTimeout(resolve, retryDelays[attempt]));
+              }
+            }
+            const idx = chat.indexOf(thinkingMsg);
+            if (idx > -1) chat.splice(idx, 1);
+
+            if (data.reply) {
+              origPush({ role: 'ai', text: data.reply });
+              console.log('[api] respuesta de Llama recibida');
+            } else {
+              origPush({ role: 'note', text: 'El asistente no pudo responder. Detalle: ' + (data.detail || 'Error desconocido') });
+            }
+          } catch (e) {
+            const idx = chat.indexOf(thinkingMsg);
+            if (idx > -1) chat.splice(idx, 1);
+            if (e.name === 'AbortError') {
+              origPush({ role: 'note', text: 'La IA tardó demasiado. El procesador está muy exigido.' });
+            } else {
+              origPush({ role: 'note', text: 'No se pudo conectar con la IA en ' + API + '. Verificá que el backend esté activo. Detalle: ' + e.message });
+            }
+            console.error('[api] error de conexión con la IA:', e);
+          } finally {
+            isProcessingAI = false;
+            if (chatIn) chatIn.disabled = false;
+            if (chatSend) chatSend.disabled = false;
+            window.PANEL.renderChat();
+          }
+        })();
+      }
+      return res;
+    };
+    
+    chat.__aiPatched = true;
+    console.log('[api] Chat interceptado: los mensajes irán a Llama-3.2');
+    return true;
+  }
+
   // Exponer helpers para debug desde la consola del navegador
   window.PANEL = window.PANEL || {};
   window.PANEL.apiTest = {
@@ -1435,10 +1589,12 @@ if (typeof renderBoard === 'function') window.PANEL.renderBoard = renderBoard;
   };
 
   async function bootstrap(){
+    await resolveApi();
     await Promise.all([loadProducts(), loadOrders(), loadTasks(), loadActivity()]);
     if (!patchOrdersUnshift()) setTimeout(patchOrdersUnshift, 200);
     if (!patchTasksUnshift()) setTimeout(patchTasksUnshift, 200);
     if (!patchFeedUnshift()) setTimeout(patchFeedUnshift, 200);
+    if (!interceptChatForAI()) setTimeout(interceptChatForAI, 200);
   }
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', bootstrap);
   else bootstrap();
