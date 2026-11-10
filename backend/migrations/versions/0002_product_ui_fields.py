@@ -13,9 +13,18 @@ branch_labels = None
 depends_on = None
 
 
+
+def _add_column(table: str, column: sa.Column) -> None:
+    """Idempotente: 0001 crea las tablas con los modelos actuales, así que en una
+    base nueva la columna puede existir ya."""
+    existing = {col["name"] for col in sa.inspect(op.get_bind()).get_columns(table)}
+    if column.name not in existing:
+        op.add_column(table, column)
+
+
 def upgrade() -> None:
-    op.add_column("products", sa.Column("min_age", sa.Integer(), nullable=True))
-    op.add_column(
+    _add_column("products", sa.Column("min_age", sa.Integer(), nullable=True))
+    _add_column(
         "products",
         sa.Column(
             "stock_trust",
@@ -24,7 +33,7 @@ def upgrade() -> None:
             server_default=sa.text("'al día'"),
         ),
     )
-    op.add_column("products", sa.Column("color", sa.String(length=20), nullable=True))
+    _add_column("products", sa.Column("color", sa.String(length=20), nullable=True))
 
 
 def downgrade() -> None:

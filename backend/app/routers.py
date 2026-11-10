@@ -170,7 +170,7 @@ def create_order(payload: OrderCreate, db: Session = Depends(get_db)):
         seller = db.scalar(select(Seller).where(Seller.name == payload.seller_name))
     else:
         # Balanceo de carga: buscar al vendedor con menos tareas pendientes
-        sellers = db.scalars(select(Seller).where(Seller.active.is_(True))).all()
+        sellers = db.scalars(select(Seller).where(Seller.active.is_(True), Seller.is_admin.is_(False))).all()
         if sellers:
             loads = []
             for sel in sellers:
@@ -591,7 +591,9 @@ def chat_with_ai(payload: ChatRequest, db: Session = Depends(get_db)):
         "- Usá SOLO los datos reales de abajo para precios, stock, edades y pedidos. "
         "Nunca inventes productos, cantidades, precios ni números de pedido.\n"
         "- Si el dato no está, decilo y pedí el SKU, el nombre del producto o el número de pedido.\n"
-        "- Si el stock dice 'confirmar con el local', avisalo."
+        "- Si el stock dice 'confirmar con el local', avisalo.\n"
+        "- Escribí en texto plano, sin markdown: nada de asteriscos ni numerales. "
+        "Para listas usá guiones simples."
     )
     if facts:
         system_prompt += (
@@ -652,4 +654,6 @@ def update_task(task_id: int, payload: TaskUpdate, db: Session = Depends(get_db)
 
 @router.get("/sellers", response_model=list[SellerRead], tags=["sellers"])
 def list_sellers(db: Session = Depends(get_db)):
-    return db.scalars(select(Seller).where(Seller.active.is_(True)).order_by(Seller.name)).all()
+    return db.scalars(
+        select(Seller).where(Seller.active.is_(True), Seller.is_admin.is_(False)).order_by(Seller.name)
+    ).all()

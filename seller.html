@@ -347,6 +347,10 @@
         }
     }
 
+    function esc(value) {
+        return String(value ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+    }
+
     function render(tasks) {
         const list = document.getElementById('task-list');
         const empty = document.getElementById('empty-msg');
@@ -382,10 +386,10 @@
 
             div.innerHTML = `
                 <div class="task-header">
-                    <div class="task-title">${t.title}</div>
+                    <div class="task-title">${esc(t.title)}</div>
                     <div class="status-pill status-${t.status}">${statusText}</div>
                 </div>
-                <div class="task-desc" style="white-space: pre-wrap;">${t.display_desc}</div>
+                <div class="task-desc" style="white-space: pre-wrap;">${esc(t.display_desc)}</div>
                 <div class="actions">${btnHtml}</div>
             `;
             list.appendChild(div);
@@ -428,8 +432,9 @@
         }
     }
 
-    loadTasks();
-    setInterval(loadTasks, 5000); // Refresca automáticamente
+    // Solo cargamos tareas con sesión iniciada; doLogin() las carga al entrar.
+    if (localStorage.getItem('sellerToken')) loadTasks();
+    setInterval(() => { if (localStorage.getItem('sellerToken')) loadTasks(); }, 5000);
 </script>
 </body>
 </html>

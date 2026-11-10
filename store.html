@@ -101,11 +101,6 @@
         <input type="password" id="reg-pass" placeholder="Contraseña">
         <button onclick="doRegister()">Crear Cuenta</button>
         <p class="auth-toggle" onclick="toggleAuthMode()">¿Ya tenés cuenta? Ingresá</p>
-        <div class="qr-container" id="qr-container">
-            <p>Escaneá este QR con Google Authenticator para activar tu 2FA:</p>
-            <img id="qr-img" src="" style="width:150px; margin-top:10px;">
-            <p style="font-size:0.8rem; color:#64748b; margin-top:10px;">Luego de escanearlo, cerrá esta ventana e iniciá sesión.</p>
-        </div>
     </div>
 </div>
 
@@ -208,9 +203,13 @@
             const data = await r.json();
             
             if (r.ok) {
-                document.getElementById('qr-container').style.display = 'block';
-                document.getElementById('qr-img').src = 'data:image/png;base64,' + data.qr_base64;
-                alert("¡Cuenta creada! Escaneá el QR y luego iniciá sesión.");
+                localStorage.setItem('customerToken', data.access_token);
+                localStorage.setItem('customerName', data.name);
+                currentUser = data.name; authToken = data.access_token;
+                document.getElementById('auth-btn').textContent = `Hola, ${data.name}`;
+                document.getElementById('auth-btn').onclick = logout;
+                closeAll();
+                alert(`¡Bienvenida/o, ${data.name}! Tu cuenta quedó creada.`);
             } else {
                 alert(data.detail);
             }
@@ -267,6 +266,11 @@
     function changeQty(sku, delta) {
         const item = cart.find(i => i.sku === sku);
         if (!item) return;
+        const prod = productsDB.find(p => p.sku === sku);
+        if (delta > 0 && prod && item.qty >= prod.stock_quantity) {
+            alert("Límite de stock alcanzado.");
+            return;
+        }
         item.qty += delta;
         if (item.qty <= 0) cart = cart.filter(i => i.sku !== sku);
         renderCart();
@@ -328,7 +332,9 @@
                 alert(`¡Gracias ${currentUser}! Pedido creado: ${data.order_number}`);
                 cart = []; renderCart(); toggleCart(); loadStore();
             } else {
-                alert("Error al procesar el pedido.");
+                const err = await r.json().catch(() => ({}));
+                alert("No se pudo confirmar el pedido: " + (err.detail || "intentá de nuevo."));
+                loadStore();  // refresca el stock por si cambió
             }
         } catch(e) { alert("Error de red."); }
         finally { btn.disabled = false; btn.textContent = "Confirmar Pedido"; }
@@ -345,7 +351,14 @@
         const txt = input.value.trim();
         if (!txt) return;
         const msgs = document.getElementById('chat-messages');
-        msgs.innerHTML += `<div class="msg user">${txt}</div>`;
+        const addMsg = (cls, text, style) => {
+            const div = document.createElement('div');
+            div.className = 'msg ' + cls;
+            div.textContent = text;  // texto plano: nunca se interpreta como HTML
+            if (style) div.style.cssText = style;
+            msgs.appendChild(div);
+        };
+        addMsg('user', txt);
         input.value = '';
         
         chatHistory.push({ role: "user", content: txt });
@@ -355,10 +368,10 @@
                 body: JSON.stringify({ messages: chatHistory, assistant: "atencion" })
             });
             const data = await r.json();
-            msgs.innerHTML += `<div class="msg ai">${data.reply}</div>`;
+            addMsg('ai', data.reply);
             chatHistory.push({ role: "assistant", content: data.reply });
         } catch(e) {
-            msgs.innerHTML += `<div class="msg ai" style="background:#fecaca">Error de IA.</div>`;
+            addMsg('ai', 'Error de IA.', 'background:#fecaca');
         }
         msgs.scrollTop = msgs.scrollHeight;
     }

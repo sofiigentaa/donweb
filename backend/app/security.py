@@ -77,3 +77,24 @@ def verify_totp(secret: str, code: str):
     if not secret or not code: return False
     totp = pyotp.TOTP(secret)
     return totp.verify(code)
+
+
+def require_admin(token: str | None = Depends(oauth2_scheme), db: Session = Depends(get_db)) -> Seller:
+    """Exige un token válido de un administrador activo."""
+    unauthorized = HTTPException(
+        status_code=status.HTTP_401_UNAUTHORIZED,
+        detail="Iniciá sesión como administrador.",
+        headers={"WWW-Authenticate": "Bearer"},
+    )
+    if not token:
+        raise unauthorized
+    try:
+        payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
+    except JWTError:
+        raise unauthorized
+    if payload.get("role") != "admin" or payload.get("sub") is None:
+        raise unauthorized
+    admin = db.scalar(select(Seller).where(Seller.id == int(payload["sub"])))
+    if not admin or not admin.is_admin or not admin.active:
+        raise unauthorized
+    return admin

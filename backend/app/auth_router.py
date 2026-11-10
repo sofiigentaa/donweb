@@ -7,7 +7,7 @@ from app.models import Customer, Seller
 from app.schemas import LoginRequest, TokenResponse, CustomerRegister, CustomerRegisterResponse, SellerCreate
 from app.security import (
     verify_password, get_password_hash, create_access_token,
-    generate_totp_secret, get_totp_uri, generate_qr_base64, verify_totp
+    generate_totp_secret, get_totp_uri, generate_qr_base64, verify_totp, require_admin
 )
 
 router = APIRouter()
@@ -17,25 +17,18 @@ def register_customer(payload: CustomerRegister, db: Session = Depends(get_db)):
     if db.scalar(select(Customer).where(Customer.email == payload.email)):
         raise HTTPException(status_code=400, detail="El email ya está registrado")
     
-    secret = generate_totp_secret()
     customer = Customer(
-        name=payload.name, 
-        email=payload.email, 
+        name=payload.name,
+        email=payload.email,
         password_hash=get_password_hash(payload.password),
-        totp_secret=secret
     )
     db.add(customer)
     db.commit()
     db.refresh(customer)
     
     token = create_access_token({"sub": str(customer.id), "role": "customer", "name": customer.name})
-    uri = get_totp_uri(secret, customer.email)
-    qr_base64 = generate_qr_base64(uri)
-    
-    return {
-        "access_token": token, "token_type": "bearer", "role": "customer", 
-        "name": customer.name, "qr_base64": qr_base64
-    }
+    # Los clientes no usan 2FA (el login solo lo exige a vendedores).
+    return {"access_token": token, "token_type": "bearer", "role": "customer", "name": customer.name}
 
 @router.post("/auth/login", response_model=TokenResponse, tags=["auth"])
 def login(payload: LoginRequest, db: Session = Depends(get_db)):
@@ -48,7 +41,12 @@ def login(payload: LoginRequest, db: Session = Depends(get_db)):
     if not user or not verify_password(payload.password, user.password_hash):
         raise HTTPException(status_code=401, detail="Email o contraseña incorrectos")
         
-    if role == "seller" and user.totp_secret:
+    if role == "seller" and user.is_admin:
+        role = "admin"
+        if not user.totp_secret:
+            raise HTTPException(status_code=403, detail="El administrador no tiene 2FA configurado.")
+
+    if role in ("seller", "admin") and user.totp_secret:
         if not payload.totp_code:
             raise HTTPException(status_code=401, detail="2FA_REQUIRED")
         if not verify_totp(user.totp_secret, payload.totp_code):
@@ -58,7 +56,11 @@ def login(payload: LoginRequest, db: Session = Depends(get_db)):
     return {"access_token": token, "token_type": "bearer", "role": role, "name": user.name}
 
 @router.post("/admin/sellers", tags=["auth"])
-def create_seller(payload: SellerCreate, db: Session = Depends(get_db)):
+def create_seller(
+    payload: SellerCreate,
+    db: Session = Depends(get_db),
+    _admin: Seller = Depends(require_admin),
+):
     if db.scalar(select(Seller).where(Seller.email == payload.email)):
         raise HTTPException(status_code=400, detail="El email ya está registrado")
     

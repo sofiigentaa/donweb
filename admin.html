@@ -13,13 +13,39 @@
         label { font-size: 0.9rem; font-weight: 600; color: #64748b; display: block; margin: 15px 0 5px; }
         input { width: 100%; padding: 12px; border: 1px solid #cbd5e1; border-radius: 8px; box-sizing: border-box; outline: none; }
         button { width: 100%; padding: 14px; background: var(--primary); color: white; border: none; border-radius: 8px; font-weight: bold; font-size: 1rem; margin-top: 20px; cursor: pointer; }
+        button:disabled { opacity: 0.6; cursor: default; }
+        .topbar { display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px; }
+        .topbar span { font-size: 0.9rem; color: #64748b; }
+        .btn-logout { width: auto; margin: 0; padding: 8px 14px; font-size: 0.85rem; background: #fee2e2; color: #dc2626; }
         .qr-result { display: none; text-align: center; margin-top: 30px; padding-top: 20px; border-top: 1px dashed #cbd5e1; }
         .qr-result img { width: 200px; height: 200px; border: 4px solid #fff; box-shadow: 0 4px 12px rgba(0,0,0,0.1); }
         .qr-result p { font-size: 0.9rem; color: #64748b; margin-top: 10px; }
+
+        #login-screen { position: fixed; inset: 0; background: var(--bg); z-index: 9999; display: flex; justify-content: center; align-items: center; padding: 20px; }
+        #login-screen .card { width: 100%; max-width: 380px; }
+        #login-screen input { margin-bottom: 10px; }
+        #login-screen button { margin-top: 5px; }
+        .hint { text-align: center; font-size: 0.8rem; color: #64748b; margin-top: 15px; }
     </style>
 </head>
 <body>
+    <!-- PANTALLA DE LOGIN -->
+    <div id="login-screen">
+        <div class="card">
+            <h1>Ingreso Administrador</h1>
+            <input type="email" id="log-email" placeholder="Email">
+            <input type="password" id="log-pass" placeholder="Contraseña">
+            <input type="text" id="log-totp" placeholder="Código de 6 dígitos" inputmode="numeric" autocomplete="one-time-code" style="display:none;">
+            <button id="login-btn" onclick="doLogin()">Ingresar</button>
+            <p class="hint">Solo administradores.</p>
+        </div>
+    </div>
+
     <div class="container">
+        <div class="topbar">
+            <span id="admin-name"></span>
+            <button class="btn-logout" onclick="logout()">Salir</button>
+        </div>
         <div class="card">
             <h1>Crear Vendedor</h1>
             <label>Nombre</label>
@@ -30,7 +56,7 @@
             <input type="password" id="password" placeholder="Clave segura">
             <label>Teléfono (opcional)</label>
             <input type="text" id="phone" placeholder="123456">
-            <button onclick="createSeller()">Crear Vendedor y Generar QR</button>
+            <button id="create-btn" onclick="createSeller()">Crear Vendedor y Generar QR</button>
 
             <div class="qr-result" id="qr-result">
                 <h3>¡Vendedor Creado!</h3>
@@ -40,8 +66,66 @@
         </div>
     </div>
     <script>
+        const API = location.protocol.startsWith('http') ? location.origin + '/api/v1' : 'http://127.0.0.1:8000/api/v1';
+        let adminToken = localStorage.getItem('adminToken');
+
+        function showPanel(name) {
+            document.getElementById('login-screen').style.display = 'none';
+            document.getElementById('admin-name').textContent = 'Hola, ' + name;
+        }
+
+        if (adminToken) showPanel(localStorage.getItem('adminName') || 'admin');
+
+        function logout() {
+            localStorage.removeItem('adminToken');
+            localStorage.removeItem('adminName');
+            window.location.reload();
+        }
+
+        // Enter en cualquier campo del login equivale a tocar "Ingresar"
+        document.querySelectorAll('#login-screen input').forEach(input =>
+            input.addEventListener('keydown', e => { if (e.key === 'Enter') doLogin(); })
+        );
+
+        async function doLogin() {
+            const btn = document.getElementById('login-btn');
+            const totpInput = document.getElementById('log-totp');
+            btn.disabled = true;
+            try {
+                const r = await fetch(API + '/auth/login', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        email: document.getElementById('log-email').value,
+                        password: document.getElementById('log-pass').value,
+                        totp_code: totpInput.value
+                    })
+                });
+                const data = await r.json();
+
+                if (r.ok && data.role === 'admin') {
+                    adminToken = data.access_token;
+                    localStorage.setItem('adminToken', data.access_token);
+                    localStorage.setItem('adminName', data.name);
+                    showPanel(data.name);
+                } else if (r.ok) {
+                    alert('Esta cuenta no es de administrador.');
+                } else if (data.detail === '2FA_REQUIRED') {
+                    totpInput.style.display = 'block';
+                    totpInput.focus();
+                    alert('Ingresá el código de 6 dígitos de Google Authenticator.');
+                } else {
+                    alert('Error: ' + data.detail);
+                }
+            } catch (e) {
+                alert('Error de conexión con el servidor');
+            } finally {
+                btn.disabled = false;
+            }
+        }
+
         async function createSeller() {
-            const btn = event.target;
+            const btn = document.getElementById('create-btn');
             btn.textContent = "Creando...";
             btn.disabled = true;
 
@@ -53,14 +137,17 @@
             };
 
             try {
-                const r = await fetch((location.protocol.startsWith('http') ? location.origin + '/api/v1' : 'http://127.0.0.1:8000/api/v1') + '/admin/sellers', {
+                const r = await fetch(API + '/admin/sellers', {
                     method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
+                    headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + adminToken },
                     body: JSON.stringify(payload)
                 });
                 const data = await r.json();
-                
-                if (r.ok) {
+
+                if (r.status === 401) {
+                    alert('Tu sesión venció. Volvé a ingresar.');
+                    logout();
+                } else if (r.ok) {
                     document.getElementById('qr-result').style.display = 'block';
                     document.getElementById('res-name').textContent = data.name;
                     document.getElementById('qr-img').src = 'data:image/png;base64,' + data.qr_base64;
